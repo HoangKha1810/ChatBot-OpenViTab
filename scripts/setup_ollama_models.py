@@ -4,8 +4,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from app.config import ANSWER_MODEL, SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, VERIFIER_MODEL
+
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ["bge-m3", "qwen2.5-coder:1.5b", "qwen2.5:1.5b"]
+MODELS = list(dict.fromkeys([SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]))
 
 
 def main() -> int:

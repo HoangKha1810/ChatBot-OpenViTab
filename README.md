@@ -8,8 +8,8 @@ This project implements the demo artefact described in `Vietnamese_TableQA_Final
 - Table normalisation with merged-header handling
 - SQLite table generation per `table_id`
 - Vietnamese schema linker with `bge-m3` embeddings
-- Text-to-SQL agent with `qwen2.5-coder:1.5b`
-- Answer synthesis and verifier agents with `qwen2.5:1.5b`
+- Text-to-SQL agent with `qwen2.5-coder:14b`
+- Answer synthesis and verifier agents with `qwen2.5:7b`
 - SQL execution with evidence rows, verifier, and confidence score
 - FastAPI backend plus a browser demo UI
 - Sample evaluation and demo regression tests
@@ -104,9 +104,9 @@ Default task models:
 | Task | Model | Why |
 | --- | --- | --- |
 | Schema linking | `bge-m3` | Multilingual embedding model, good for Vietnamese headers and aliases. |
-| Text-to-SQL | `qwen2.5-coder:1.5b` | Small, stable code/SQL model. |
-| Answer synthesis | `qwen2.5:1.5b` | Small multilingual instruction model. |
-| Evidence verifier | `qwen2.5:1.5b` | Same small multilingual model, guarded by deterministic verifier. |
+| Text-to-SQL | `qwen2.5-coder:14b` | Stronger code/SQL model for RTX A5000 24GB demos. |
+| Answer synthesis | `qwen2.5:7b` | Better multilingual instruction model for Vietnamese answers. |
+| Evidence verifier | `qwen2.5:7b` | Advisory model verifier, guarded by deterministic evidence checks. |
 
 Install on macOS:
 

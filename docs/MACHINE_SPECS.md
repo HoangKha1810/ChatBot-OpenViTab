@@ -1,6 +1,6 @@
 # Machine Specs To Rent
 
-This demo runs without training and without mock data. The default app uses real lightweight local models through Ollama plus real SQL execution over Open-ViTabQA tables.
+This demo runs without training and without mock data. The default app uses real local models through Ollama plus real SQL execution over Open-ViTabQA tables.
 
 ## For Video Demo, No Training
 
@@ -9,7 +9,7 @@ Recommended rental:
 - CPU: 4 vCPU or better
 - RAM: 16 GB comfortable, 8 GB minimum
 - Disk: 30 GB SSD
-- GPU: not required
+- GPU: NVIDIA RTX A5000 24 GB, L4 24 GB, A10G 24 GB, or RTX 4090 24 GB
 - OS: Ubuntu 22.04 LTS
 - Python: 3.11
 
@@ -21,7 +21,7 @@ Good low-cost choices:
 
 Expected behavior:
 
-- First run downloads about 13 MB of real Open-ViTabQA JSON plus about 2-3 GB of Ollama models.
+- First run downloads about 13 MB of real Open-ViTabQA JSON plus roughly 15-17 GB of Ollama models.
 - SQLite cache is generated on demand in `data/processed/sqlite`.
 - Typical single-query latency depends on CPU. On Apple Silicon or a good 4-8 vCPU VPS, expect several seconds for the full model pipeline.
 
@@ -35,16 +35,16 @@ If you want faster local inference or larger models:
 - Disk: 80 GB SSD
 - CUDA image: Ubuntu 22.04 + CUDA 12.x
 
-Default lightweight models:
+Default RTX A5000 24 GB models:
 
 - Schema linking: `bge-m3`
-- Text-to-SQL: `qwen2.5-coder:1.5b`
-- Answer synthesis/verifier: `qwen2.5:1.5b`
+- Text-to-SQL: `qwen2.5-coder:14b`
+- Answer synthesis/verifier: `qwen2.5:7b`
 
 Optional larger model swaps:
 
-- Text-to-SQL: `qwen2.5-coder:3b` or `qwen2.5-coder:7b`
-- Answer synthesis: `qwen2.5:3b`, `qwen2.5:7b`, or Llama 3.1/3.2 8B Instruct
+- Text-to-SQL: `qwen2.5-coder:32b` on A100 40 GB or better
+- Answer synthesis: `qwen2.5:14b` on A100 40 GB or better
 
 Practical rental choices:
 

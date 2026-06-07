@@ -9,10 +9,12 @@ from pathlib import Path
 
 import requests
 
+from app.config import ANSWER_MODEL, SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, VERIFIER_MODEL
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-MODELS = ["bge-m3", "qwen2.5-coder:1.5b", "qwen2.5:1.5b"]
+MODELS = list(dict.fromkeys([SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]))
 
 
 def main() -> int:
@@ -29,6 +31,9 @@ def main() -> int:
     env = os.environ.copy()
     env["TABLEQA_REQUIRE_GPU"] = "1"
     env["TABLEQA_STARTUP_CHECKS"] = "1"
+    env.setdefault("OLLAMA_NUM_PARALLEL", "1")
+    env.setdefault("OLLAMA_KEEP_ALIVE", "10m")
+    env.setdefault("OLLAMA_KV_CACHE_TYPE", "q8_0")
     return subprocess.call(
         [
             sys.executable,
@@ -76,8 +81,12 @@ def ensure_ollama_server() -> None:
     print("[TableQA] Starting `ollama serve` in background...")
     log_path = ROOT / "data" / "processed" / "ollama.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.setdefault("OLLAMA_NUM_PARALLEL", "1")
+    env.setdefault("OLLAMA_KEEP_ALIVE", "10m")
+    env.setdefault("OLLAMA_KV_CACHE_TYPE", "q8_0")
     with log_path.open("ab") as log_file:
-        subprocess.Popen(["ollama", "serve"], stdout=log_file, stderr=subprocess.STDOUT, cwd=ROOT)
+        subprocess.Popen(["ollama", "serve"], stdout=log_file, stderr=subprocess.STDOUT, cwd=ROOT, env=env)
     for _ in range(30):
         if ollama_ready():
             print(f"[TableQA] Ollama server ready. Log: {log_path}")
@@ -118,32 +127,34 @@ def list_models() -> list[str]:
 
 
 def warmup_ollama() -> None:
-    print("[TableQA] Warming up embedding model bge-m3...")
+    print(f"[TableQA] Warming up embedding model {SCHEMA_EMBED_MODEL}...")
     response = requests.post(
         f"{OLLAMA_BASE_URL}/api/embed",
-        json={"model": "bge-m3", "input": ["kiểm tra GPU cho Vietnamese TableQA"]},
-        timeout=120,
+        json={"model": SCHEMA_EMBED_MODEL, "input": ["kiểm tra GPU cho Vietnamese TableQA"], "keep_alive": "10m"},
+        timeout=240,
     )
     response.raise_for_status()
     print("[TableQA] Embedding warm-up OK.")
 
-    print("[TableQA] Warming up chat model qwen2.5:1.5b...")
-    response = requests.post(
-        f"{OLLAMA_BASE_URL}/api/chat",
-        json={
-            "model": "qwen2.5:1.5b",
-            "messages": [
-                {"role": "system", "content": "Return JSON only."},
-                {"role": "user", "content": '{"ok": true}'},
-            ],
-            "stream": False,
-            "format": "json",
-            "options": {"temperature": 0},
-        },
-        timeout=120,
-    )
-    response.raise_for_status()
-    print("[TableQA] Chat warm-up OK.")
+    for model in dict.fromkeys([TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]):
+        print(f"[TableQA] Warming up chat model {model}...")
+        response = requests.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "Return JSON only."},
+                    {"role": "user", "content": '{"ok": true}'},
+                ],
+                "stream": False,
+                "format": "json",
+                "keep_alive": "10m",
+                "options": {"temperature": 0, "seed": 42, "num_predict": 64},
+            },
+            timeout=240,
+        )
+        response.raise_for_status()
+        print(f"[TableQA] Chat warm-up OK: {model}.")
 
 
 def print_ollama_ps() -> None:

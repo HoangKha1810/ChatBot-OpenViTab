@@ -23,7 +23,7 @@ TABLEQA_REQUIRE_GPU = os.getenv("TABLEQA_REQUIRE_GPU", "0").strip().lower() in {
 TABLEQA_STARTUP_CHECKS = os.getenv("TABLEQA_STARTUP_CHECKS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 SCHEMA_EMBED_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_MODEL", "bge-m3")
-TEXT_TO_SQL_MODEL = os.getenv("TABLEQA_TEXT_TO_SQL_MODEL", "qwen2.5-coder:1.5b")
-ANSWER_MODEL = os.getenv("TABLEQA_ANSWER_MODEL", "qwen2.5:1.5b")
-VERIFIER_MODEL = os.getenv("TABLEQA_VERIFIER_MODEL", "qwen2.5:1.5b")
-OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
+TEXT_TO_SQL_MODEL = os.getenv("TABLEQA_TEXT_TO_SQL_MODEL", "qwen2.5-coder:14b")
+ANSWER_MODEL = os.getenv("TABLEQA_ANSWER_MODEL", "qwen2.5:7b")
+VERIFIER_MODEL = os.getenv("TABLEQA_VERIFIER_MODEL", "qwen2.5:7b")
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "180"))
