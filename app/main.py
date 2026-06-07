@@ -11,7 +11,7 @@ from app.config import MAX_TABLE_PREVIEW_ROWS, STATIC_DIR, TABLEQA_STARTUP_CHECK
 from app.data_loader import DatasetNotFoundError, dataset_stats, get_table, load_qas
 from app.model_runtime import ModelUnavailableError, get_runtime
 from app.pipeline import answer_qa, answer_question
-from app.progress import fail_progress, finish_progress, get_progress, start_progress
+from app.progress import fail_progress, finish_progress, get_progress, get_result, start_progress, store_result
 
 
 @asynccontextmanager
@@ -67,6 +67,14 @@ def models() -> dict[str, object]:
 @app.get("/api/progress/{request_id}")
 def progress(request_id: str) -> dict[str, object]:
     return get_progress(request_id)
+
+
+@app.get("/api/result/{request_id}")
+def result(request_id: str) -> dict[str, object]:
+    cached = get_result(request_id)
+    if cached is None:
+        raise HTTPException(status_code=404, detail="Result is not ready.")
+    return cached
 
 
 @app.get("/api/examples")
@@ -126,8 +134,10 @@ def ask(payload: AskRequest) -> dict[str, object]:
             expected_answer=payload.expected_answer,
             request_id=request_id,
         )
+        payload = result.model_dump()
+        store_result(request_id, payload)
         finish_progress(request_id, "Answer ready.")
-        return result.model_dump()
+        return payload
     except KeyError as exc:
         fail_progress(request_id, str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -145,8 +155,10 @@ def ask_existing(qa_id: str, split: str = Query(default="dev", pattern="^(train|
     start_progress(request_id, f"Received /api/ask/{qa_id} request.")
     try:
         result = answer_qa(qa_id, split, request_id=request_id)
+        payload = result.model_dump()
+        store_result(request_id, payload)
         finish_progress(request_id, "Answer ready.")
-        return result.model_dump()
+        return payload
     except KeyError as exc:
         fail_progress(request_id, str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc

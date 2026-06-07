@@ -22,6 +22,7 @@ class ProgressRecord:
     started_at: float = field(default_factory=time.perf_counter)
     updated_at: float = field(default_factory=time.perf_counter)
     events: list[ProgressEvent] = field(default_factory=list)
+    result: dict[str, Any] | None = None
 
 
 _LOCK = Lock()
@@ -58,6 +59,13 @@ def finish_progress(request_id: str, message: str = "Pipeline hoàn tất.") -> 
             _PROGRESS[request_id].status = "done"
 
 
+def store_result(request_id: str, result: dict[str, Any]) -> None:
+    with _LOCK:
+        record = _PROGRESS.setdefault(request_id, ProgressRecord(request_id=request_id))
+        record.result = result
+        record.updated_at = time.perf_counter()
+
+
 def fail_progress(request_id: str, message: str) -> None:
     add_progress(request_id, "error", message)
     with _LOCK:
@@ -73,8 +81,17 @@ def get_progress(request_id: str) -> dict[str, Any]:
         return {
             "request_id": record.request_id,
             "status": record.status,
+            "has_result": record.result is not None,
             "events": [event.__dict__ for event in record.events],
         }
+
+
+def get_result(request_id: str) -> dict[str, Any] | None:
+    with _LOCK:
+        record = _PROGRESS.get(request_id)
+        if not record:
+            return None
+        return record.result
 
 
 def _trim_locked() -> None:

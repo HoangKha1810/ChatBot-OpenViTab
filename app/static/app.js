@@ -17,7 +17,14 @@ async function fetchJson(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || response.statusText);
+    let message = text;
+    try {
+      const payload = JSON.parse(text);
+      message = payload.detail || payload.error || text;
+    } catch (_) {
+      // Keep the plain response body.
+    }
+    throw new Error(message || response.statusText || `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -212,20 +219,24 @@ async function runPipeline() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    state.result = result;
-    $("#answer").textContent = result.answer;
-    $("#expected").textContent = result.expected_answer ? `Đáp án gốc: ${result.expected_answer}` : "";
-    $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
-    $("#confidence-meter").value = result.confidence.score;
-    $("#latency").textContent = `${result.latency_ms} ms`;
+    applyResult(result);
     await pollProgress(requestId);
     $("#run-status").className = "run-status";
     renderTrace();
     renderTable();
   } catch (error) {
-    $("#answer").textContent = error.message;
-    $("#run-status").textContent = `Lỗi: ${error.message}`;
-    $("#run-status").className = "run-status error";
+    const recovered = await recoverResult(requestId);
+    if (recovered) {
+      $("#run-status").textContent = "Đã khôi phục kết quả sau lỗi kết nối tạm thời.";
+      $("#run-status").className = "run-status";
+      renderTrace();
+      renderTable();
+    } else {
+      const message = describeError(error);
+      $("#answer").textContent = message;
+      $("#run-status").textContent = `Lỗi: ${message}`;
+      $("#run-status").className = "run-status error";
+    }
   } finally {
     stopProgressPolling();
     $("#run").disabled = false;
@@ -234,6 +245,45 @@ async function runPipeline() {
       window.lucide.createIcons();
     }
   }
+}
+
+function applyResult(result) {
+  state.result = result;
+  $("#answer").textContent = result.answer || "(Không có câu trả lời)";
+  $("#expected").textContent = result.expected_answer ? `Đáp án gốc: ${result.expected_answer}` : "";
+  $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
+  $("#confidence-meter").value = result.confidence.score;
+  $("#latency").textContent = `${result.latency_ms} ms`;
+}
+
+async function recoverResult(requestId) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await sleep(700);
+    try {
+      const progress = await fetchJson(`/api/progress/${encodeURIComponent(requestId)}`);
+      state.progress = progress;
+      if (progress.has_result || progress.status === "done") {
+        const result = await fetchJson(`/api/result/${encodeURIComponent(requestId)}`);
+        applyResult(result);
+        return true;
+      }
+      if (progress.status === "error") {
+        return false;
+      }
+    } catch (_) {
+      // Keep retrying briefly; remote GUI/tunnels sometimes drop a single request.
+    }
+  }
+  return false;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function describeError(error) {
+  const text = String(error?.message || error || "").trim();
+  return text || "Kết nối bị ngắt hoặc backend chưa trả response. Xem tab Progress/terminal để biết bước cuối.";
 }
 
 function renderTrace() {
