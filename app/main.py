@@ -1,19 +1,37 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.config import MAX_TABLE_PREVIEW_ROWS, STATIC_DIR
+from app.config import MAX_TABLE_PREVIEW_ROWS, STATIC_DIR, TABLEQA_STARTUP_CHECKS
 from app.data_loader import DatasetNotFoundError, dataset_stats, get_table, load_qas
 from app.model_runtime import ModelUnavailableError, get_runtime
 from app.pipeline import answer_qa, answer_question
+from app.progress import fail_progress, finish_progress, get_progress, start_progress
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if TABLEQA_STARTUP_CHECKS:
+        start_progress("startup", "Running startup GPU and model checks.")
+        runtime = get_runtime()
+        runtime.ensure_gpu("startup")
+        runtime.ensure_ready("startup")
+        runtime.warmup("startup")
+        runtime.ensure_ollama_gpu_loaded("startup")
+        finish_progress("startup", "Startup checks passed.")
+    yield
+
 
 app = FastAPI(
     title="Vietnamese SQL-Grounded TableQA Demo",
     description="Open-ViTabQA demo with table-to-SQL execution, evidence verification, and confidence trace.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -24,6 +42,7 @@ class AskRequest(BaseModel):
     table_id: str
     qa_id: str | None = None
     expected_answer: str | None = None
+    request_id: str | None = None
 
 
 @app.get("/")
@@ -43,6 +62,11 @@ def health() -> dict[str, object]:
 @app.get("/api/models")
 def models() -> dict[str, object]:
     return get_runtime().status()
+
+
+@app.get("/api/progress/{request_id}")
+def progress(request_id: str) -> dict[str, object]:
+    return get_progress(request_id)
 
 
 @app.get("/api/examples")
@@ -92,25 +116,40 @@ def table_detail(table_id: str) -> dict[str, object]:
 
 @app.post("/api/ask")
 def ask(payload: AskRequest) -> dict[str, object]:
+    request_id = payload.request_id or f"api-{payload.table_id}"
+    start_progress(request_id, "Received /api/ask request.")
     try:
         result = answer_question(
             table_id=payload.table_id,
             question=payload.question,
             qa_id=payload.qa_id,
             expected_answer=payload.expected_answer,
+            request_id=request_id,
         )
+        finish_progress(request_id, "Answer ready.")
         return result.model_dump()
     except KeyError as exc:
+        fail_progress(request_id, str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ModelUnavailableError as exc:
+        fail_progress(request_id, str(exc))
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        fail_progress(request_id, str(exc))
+        raise
 
 
 @app.post("/api/ask/{qa_id}")
 def ask_existing(qa_id: str, split: str = Query(default="dev", pattern="^(train|dev|test)$")) -> dict[str, object]:
+    request_id = f"qa-{qa_id}"
+    start_progress(request_id, f"Received /api/ask/{qa_id} request.")
     try:
-        return answer_qa(qa_id, split).model_dump()
+        result = answer_qa(qa_id, split, request_id=request_id)
+        finish_progress(request_id, "Answer ready.")
+        return result.model_dump()
     except KeyError as exc:
+        fail_progress(request_id, str(exc))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ModelUnavailableError as exc:
+        fail_progress(request_id, str(exc))
         raise HTTPException(status_code=503, detail=str(exc)) from exc

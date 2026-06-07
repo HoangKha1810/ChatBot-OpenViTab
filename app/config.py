@@ -19,6 +19,8 @@ MAX_TABLE_PREVIEW_ROWS = 80
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 TABLEQA_USE_MODELS = os.getenv("TABLEQA_USE_MODELS", "1").strip().lower() not in {"0", "false", "no", "off"}
 TABLEQA_REQUIRE_MODELS = os.getenv("TABLEQA_REQUIRE_MODELS", "1").strip().lower() not in {"0", "false", "no", "off"}
+TABLEQA_REQUIRE_GPU = os.getenv("TABLEQA_REQUIRE_GPU", "0").strip().lower() in {"1", "true", "yes", "on"}
+TABLEQA_STARTUP_CHECKS = os.getenv("TABLEQA_STARTUP_CHECKS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 SCHEMA_EMBED_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_MODEL", "bge-m3")
 TEXT_TO_SQL_MODEL = os.getenv("TABLEQA_TEXT_TO_SQL_MODEL", "qwen2.5-coder:1.5b")

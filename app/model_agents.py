@@ -15,7 +15,12 @@ from app.text_utils import normalize_key
 from app.verifier import verify_answer
 
 
-def link_schema_with_model(runtime: OllamaRuntime, table: TableInfo, question: str) -> tuple[list[dict[str, Any]], ModelTrace]:
+def link_schema_with_model(
+    runtime: OllamaRuntime,
+    table: TableInfo,
+    question: str,
+    request_id: str = "ollama",
+) -> tuple[list[dict[str, Any]], ModelTrace]:
     settings = runtime.settings
     columns = build_columns(table, question)
     column_texts = []
@@ -29,7 +34,7 @@ def link_schema_with_model(runtime: OllamaRuntime, table: TableInfo, question: s
         aliases = ", ".join(col.aliases)
         column_texts.append(f"Cột {col.sql_name}: {col.header}. Alias: {aliases}. Ví dụ: {' | '.join(samples)}")
 
-    embeddings, latency = runtime.embed(settings.schema_embed_model, [question] + column_texts)
+    embeddings, latency = runtime.embed(settings.schema_embed_model, [question] + column_texts, request_id=request_id)
     q_vec = embeddings[0]
     ranked = []
     for col, emb in zip(columns, embeddings[1:]):
@@ -59,6 +64,7 @@ def generate_sql_with_model(
     question: str,
     candidate: PlannedSQL,
     schema_rank: list[dict[str, Any]],
+    request_id: str = "ollama",
 ) -> tuple[PlannedSQL, ModelTrace]:
     settings = runtime.settings
     schema = _schema_description(table)
@@ -108,7 +114,7 @@ def generate_sql_with_model(
         ensure_ascii=False,
     )
 
-    parsed, latency, _ = runtime.chat_json(settings.text_to_sql_model, system, user)
+    parsed, latency, _ = runtime.chat_json(settings.text_to_sql_model, system, user, request_id=request_id)
     model_sql = str(parsed.get("sql") or "").strip()
     model_params = parsed.get("params") if isinstance(parsed.get("params"), list) else []
     status = "ok"
@@ -165,6 +171,7 @@ def synthesize_answer_with_model(
     question: str,
     plan: QueryPlan,
     evidence: list[EvidenceRow],
+    request_id: str = "ollama",
 ) -> tuple[str, ModelTrace]:
     settings = runtime.settings
     extractive = synthesize_answer(table, question, plan, evidence)
@@ -184,7 +191,7 @@ def synthesize_answer_with_model(
         },
         ensure_ascii=False,
     )
-    parsed, latency, _ = runtime.chat_json(settings.answer_model, system, user)
+    parsed, latency, _ = runtime.chat_json(settings.answer_model, system, user, request_id=request_id)
     proposed = str(parsed.get("answer") or "").strip()
     if not proposed:
         proposed = extractive
@@ -217,6 +224,7 @@ def verify_with_model(
     plan: QueryPlan,
     evidence: list[EvidenceRow],
     deterministic: VerificationResult,
+    request_id: str = "ollama",
 ) -> tuple[VerificationResult, ModelTrace]:
     settings = runtime.settings
     system = (
@@ -238,7 +246,7 @@ def verify_with_model(
         },
         ensure_ascii=False,
     )
-    parsed, latency, _ = runtime.chat_json(settings.verifier_model, system, user)
+    parsed, latency, _ = runtime.chat_json(settings.verifier_model, system, user, request_id=request_id)
     model_passed = bool(parsed.get("passed"))
     model_checks = [str(item) for item in parsed.get("checks", []) if str(item).strip()] if isinstance(parsed.get("checks"), list) else []
     model_reasons = (

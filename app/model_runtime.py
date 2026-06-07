@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -12,11 +14,13 @@ from app.config import (
     OLLAMA_BASE_URL,
     OLLAMA_TIMEOUT_SECONDS,
     SCHEMA_EMBED_MODEL,
+    TABLEQA_REQUIRE_GPU,
     TABLEQA_REQUIRE_MODELS,
     TABLEQA_USE_MODELS,
     TEXT_TO_SQL_MODEL,
     VERIFIER_MODEL,
 )
+from app.progress import add_progress
 
 
 class ModelUnavailableError(RuntimeError):
@@ -91,14 +95,18 @@ class OllamaRuntime:
             },
         }
 
-    def ensure_ready(self) -> None:
+    def ensure_ready(self, request_id: str = "startup") -> None:
         if not self.settings.enabled:
             if self.settings.required:
                 raise ModelUnavailableError("TABLEQA_USE_MODELS=0 nhưng TABLEQA_REQUIRE_MODELS=1.")
+            add_progress(request_id, "models", "Model runtime disabled by TABLEQA_USE_MODELS=0.")
             return
 
+        add_progress(request_id, "models", f"Checking Ollama at {self.settings.base_url}.")
         status = self.status()
         if status.get("available"):
+            models = ", ".join(status.get("models") or [])
+            add_progress(request_id, "models", f"Required models ready: {models}.")
             return
 
         missing = ", ".join(status.get("missing") or [])
@@ -108,7 +116,76 @@ class OllamaRuntime:
             f"{base} và các model: {missing}. Chạy `python scripts/setup_ollama_models.py`."
         )
         if self.settings.required:
+            add_progress(request_id, "models", f"Not ready: {message}")
             raise ModelUnavailableError(message)
+
+    def ensure_gpu(self, request_id: str = "startup") -> None:
+        if not TABLEQA_REQUIRE_GPU:
+            add_progress(request_id, "gpu", "TABLEQA_REQUIRE_GPU=0, skipping hard GPU requirement.")
+            return
+        if shutil.which("nvidia-smi") is None:
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng không tìm thấy `nvidia-smi`.")
+        try:
+            output = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=name,memory.total,driver_version",
+                    "--format=csv,noheader",
+                ],
+                text=True,
+                timeout=10,
+            ).strip()
+        except Exception as exc:
+            raise ModelUnavailableError(f"Không kiểm tra được NVIDIA GPU: {exc}") from exc
+        if not output:
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng `nvidia-smi` không trả GPU nào.")
+        add_progress(request_id, "gpu", f"NVIDIA GPU detected: {output.splitlines()[0]}.")
+
+    def warmup(self, request_id: str = "startup") -> None:
+        if not self.settings.enabled:
+            add_progress(request_id, "warmup", "Model runtime disabled, skipping Ollama warm-up.")
+            return
+
+        add_progress(request_id, "warmup", f"Warming up embedding model {self.settings.schema_embed_model}.")
+        self.embed(self.settings.schema_embed_model, ["kiểm tra GPU cho Vietnamese TableQA"], request_id=request_id)
+
+        for model in dict.fromkeys(
+            [
+                self.settings.text_to_sql_model,
+                self.settings.answer_model,
+                self.settings.verifier_model,
+            ]
+        ):
+            add_progress(request_id, "warmup", f"Warming up chat model {model}.")
+            response = requests.post(
+                f"{self.settings.base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "Return JSON only."},
+                        {"role": "user", "content": '{"ok": true}'},
+                    ],
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0},
+                },
+                timeout=OLLAMA_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            add_progress(request_id, "warmup", f"{model} warm-up OK.")
+
+    def ensure_ollama_gpu_loaded(self, request_id: str = "startup") -> None:
+        if not TABLEQA_REQUIRE_GPU:
+            return
+        if shutil.which("ollama") is None:
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng không tìm thấy lệnh `ollama`.")
+        try:
+            output = subprocess.check_output(["ollama", "ps"], text=True, timeout=10).strip()
+        except Exception as exc:
+            raise ModelUnavailableError(f"Không chạy được `ollama ps` để kiểm tra GPU: {exc}") from exc
+        add_progress(request_id, "gpu", f"ollama ps: {output or 'no loaded models'}")
+        if "gpu" not in output.lower():
+            raise ModelUnavailableError("Ollama đã chạy model nhưng `ollama ps` không báo GPU. Kiểm tra CUDA/NVIDIA runtime.")
 
     def list_models(self) -> list[str]:
         response = requests.get(f"{self.settings.base_url}/api/tags", timeout=5)
@@ -126,7 +203,15 @@ class OllamaRuntime:
                 missing.append(model)
         return missing
 
-    def chat_json(self, model: str, system: str, user: str, temperature: float = 0.0) -> tuple[dict[str, Any], float, str]:
+    def chat_json(
+        self,
+        model: str,
+        system: str,
+        user: str,
+        temperature: float = 0.0,
+        request_id: str = "ollama",
+    ) -> tuple[dict[str, Any], float, str]:
+        add_progress(request_id, "ollama_chat", f"Calling {model}.")
         started = time.perf_counter()
         payload = {
             "model": model,
@@ -150,9 +235,12 @@ class OllamaRuntime:
         response.raise_for_status()
         content = response.json().get("message", {}).get("content", "")
         parsed = _parse_json_object(content)
-        return parsed, round((time.perf_counter() - started) * 1000, 2), content
+        latency = round((time.perf_counter() - started) * 1000, 2)
+        add_progress(request_id, "ollama_chat", f"{model} completed in {latency} ms.")
+        return parsed, latency, content
 
-    def embed(self, model: str, texts: list[str]) -> tuple[list[list[float]], float]:
+    def embed(self, model: str, texts: list[str], request_id: str = "ollama") -> tuple[list[list[float]], float]:
+        add_progress(request_id, "ollama_embed", f"Calling {model} for {len(texts)} text(s).")
         started = time.perf_counter()
         response = requests.post(
             f"{self.settings.base_url}/api/embed",
@@ -164,7 +252,9 @@ class OllamaRuntime:
         embeddings = payload.get("embeddings")
         if not isinstance(embeddings, list):
             raise ModelUnavailableError(f"Ollama embed response không hợp lệ cho model {model}.")
-        return embeddings, round((time.perf_counter() - started) * 1000, 2)
+        latency = round((time.perf_counter() - started) * 1000, 2)
+        add_progress(request_id, "ollama_embed", f"{model} completed in {latency} ms.")
+        return embeddings, latency
 
 
 def get_runtime() -> OllamaRuntime:

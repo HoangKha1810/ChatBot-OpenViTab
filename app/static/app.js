@@ -4,6 +4,9 @@ const state = {
   selected: null,
   table: null,
   result: null,
+  progress: null,
+  progressTimer: null,
+  requestId: null,
   tab: "plan",
 };
 
@@ -142,6 +145,8 @@ async function selectExample(item) {
   $("#domain-label").textContent = item.table_domain || "No domain";
   $("#expected").textContent = item.expected_answer ? `Đáp án gốc: ${item.expected_answer}` : "";
   $("#answer").textContent = "Sẵn sàng chạy trên bảng thật.";
+  $("#run-status").textContent = "Trạng thái: chờ chạy.";
+  $("#run-status").className = "run-status";
   $("#confidence-label").textContent = "-";
   $("#confidence-meter").value = 0;
   $("#latency").textContent = "0 ms";
@@ -181,14 +186,26 @@ async function runPipeline() {
   if (!state.selected && !state.table) {
     return;
   }
+  const requestId = `ui-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  state.requestId = requestId;
+  state.progress = { status: "running", events: [] };
+  stopProgressPolling();
   $("#run").disabled = true;
+  $("#run").innerHTML = '<i data-lucide="loader-circle"></i> Đang chạy...';
   $("#answer").textContent = "Đang chạy SQL planner, execute và verifier...";
+  $("#run-status").textContent = "Trạng thái: gửi request tới backend...";
+  $("#run-status").className = "run-status running";
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+  startProgressPolling(requestId);
   try {
     const payload = {
       question: $("#question").value,
       table_id: state.selected?.table_id || state.table.table_id,
       qa_id: state.selected?.qa_id || null,
       expected_answer: state.selected?.expected_answer || null,
+      request_id: requestId,
     };
     const result = await fetchJson("/api/ask", {
       method: "POST",
@@ -201,17 +218,30 @@ async function runPipeline() {
     $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
     $("#confidence-meter").value = result.confidence.score;
     $("#latency").textContent = `${result.latency_ms} ms`;
+    await pollProgress(requestId);
+    $("#run-status").className = "run-status";
     renderTrace();
     renderTable();
   } catch (error) {
     $("#answer").textContent = error.message;
+    $("#run-status").textContent = `Lỗi: ${error.message}`;
+    $("#run-status").className = "run-status error";
   } finally {
+    stopProgressPolling();
     $("#run").disabled = false;
+    $("#run").innerHTML = '<i data-lucide="play"></i> Chạy pipeline';
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
   }
 }
 
 function renderTrace() {
   if (!state.result) {
+    if (state.tab === "progress" && state.progress) {
+      renderProgressTrace();
+      return;
+    }
     $("#trace-body").innerHTML = '<div class="empty">Trace sẽ xuất hiện sau khi chạy pipeline.</div>';
     return;
   }
@@ -230,6 +260,8 @@ function renderTrace() {
     $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.sql_trace, null, 2))}</pre>`;
   } else if (state.tab === "models") {
     $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.model_trace || [], null, 2))}</pre>`;
+  } else if (state.tab === "progress") {
+    renderProgressTrace();
   } else if (state.tab === "evidence") {
     $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.evidence, null, 2))}</pre>`;
   } else if (state.tab === "verifier") {
@@ -244,6 +276,52 @@ function renderTrace() {
       ),
     )}</pre>`;
   }
+}
+
+function startProgressPolling(requestId) {
+  pollProgress(requestId);
+  state.progressTimer = window.setInterval(() => pollProgress(requestId), 900);
+}
+
+function stopProgressPolling() {
+  if (state.progressTimer) {
+    window.clearInterval(state.progressTimer);
+    state.progressTimer = null;
+  }
+}
+
+async function pollProgress(requestId) {
+  try {
+    const progress = await fetchJson(`/api/progress/${encodeURIComponent(requestId)}`);
+    state.progress = progress;
+    const last = progress.events?.at(-1);
+    if (last) {
+      $("#run-status").textContent = `[${last.stage}] ${last.message} (${Math.round(last.elapsed_ms)} ms)`;
+    }
+    if (state.tab === "progress") {
+      renderProgressTrace();
+    }
+  } catch (error) {
+    $("#run-status").textContent = `Không đọc được progress: ${error.message}`;
+  }
+}
+
+function renderProgressTrace() {
+  const events = state.progress?.events || [];
+  if (!events.length) {
+    $("#trace-body").innerHTML = '<div class="empty">Đang chờ progress từ backend...</div>';
+    return;
+  }
+  $("#trace-body").innerHTML = `<div class="progress-list">${events
+    .map(
+      (event) => `
+        <div class="progress-item">
+          <span>${escapeHtml(Math.round(event.elapsed_ms))} ms</span>
+          <strong>[${escapeHtml(event.stage)}] ${escapeHtml(event.message)}</strong>
+        </div>
+      `,
+    )
+    .join("")}</div>`;
 }
 
 function kv(items) {

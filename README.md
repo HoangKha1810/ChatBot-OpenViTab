@@ -31,6 +31,23 @@ Open:
 http://127.0.0.1:8000
 ```
 
+## Ubuntu GPU Demo Command
+
+On Vast.ai or another Ubuntu GPU container, use this one command after cloning and installing Python requirements:
+
+```bash
+python3 scripts/run_gpu_demo.py
+```
+
+It prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, prints `ollama ps`, then starts Uvicorn with:
+
+```text
+TABLEQA_REQUIRE_GPU=1
+TABLEQA_STARTUP_CHECKS=1
+```
+
+During a browser run, the Uvicorn terminal prints `[TableQA]` stage logs and the UI shows a live Progress tab.
+
 ## Run Tests
 
 ```bash
