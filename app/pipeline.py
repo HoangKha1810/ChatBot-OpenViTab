@@ -86,6 +86,7 @@ def answer_question(
         )
         model_trace.append(trace)
         add_progress(progress_id, "verifier", f"{trace.status}: {trace.note}")
+        add_progress(progress_id, "verifier", f"Deterministic evidence verifier passed={verifier.passed}.")
     else:
         verifier = deterministic_verifier
 

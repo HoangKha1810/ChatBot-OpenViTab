@@ -221,10 +221,13 @@ class OllamaRuntime:
             ],
             "stream": False,
             "format": "json",
+            "keep_alive": "10m",
             "options": {
                 "temperature": temperature,
                 "top_p": 0.8,
                 "num_ctx": 8192,
+                "num_predict": 512,
+                "seed": 42,
             },
         }
         response = requests.post(
@@ -244,7 +247,7 @@ class OllamaRuntime:
         started = time.perf_counter()
         response = requests.post(
             f"{self.settings.base_url}/api/embed",
-            json={"model": model, "input": texts},
+            json={"model": model, "input": texts, "keep_alive": "10m"},
             timeout=OLLAMA_TIMEOUT_SECONDS,
         )
         response.raise_for_status()

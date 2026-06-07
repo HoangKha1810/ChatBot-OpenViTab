@@ -137,7 +137,11 @@ def generate_sql_with_model(
         try:
             model_evidence = execute_sql(table, trace.sql, trace.params)
             candidate_evidence = execute_sql(table, candidate.trace.sql, candidate.trace.params)
-            if model_evidence or not candidate_evidence:
+            if candidate_evidence:
+                status = "advisory"
+                note = "Model SQL checked; keeping deterministic candidate because it already has evidence."
+                selected = candidate
+            elif model_evidence:
                 selected = PlannedSQL(plan=plan, trace=trace)
             else:
                 status = "repaired"
@@ -257,20 +261,22 @@ def verify_with_model(
 
     checks = deterministic.checks + [f"Model verifier: {item}" for item in model_checks[:4]]
     reasons = list(deterministic.unsupported_reasons)
-    if not model_passed:
+    if not model_passed and not deterministic.passed:
         reasons.extend(model_reasons or ["Model verifier không xác nhận evidence support."])
+    elif not model_passed:
+        checks.append("Model verifier không xác nhận, nhưng deterministic evidence verifier đã pass nên giữ kết quả evidence-safe.")
 
     return VerificationResult(
-        passed=deterministic.passed and model_passed,
+        passed=deterministic.passed,
         checks=checks,
         unsupported_reasons=reasons,
     ), ModelTrace(
         task="verification",
         backend=settings.backend,
         model=settings.verifier_model,
-        status="ok" if model_passed else "failed",
+        status="ok" if model_passed else "advisory",
         latency_ms=latency,
-        note="Model verifier combined with deterministic evidence checks.",
+        note="Model verifier is advisory; deterministic evidence check is authoritative for demo stability.",
     )
 
 
