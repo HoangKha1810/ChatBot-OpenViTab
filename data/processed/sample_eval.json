@@ -1,0 +1,207 @@
+{
+  "split": "dev",
+  "limit": 20,
+  "exact_match": 0.35,
+  "records": [
+    {
+      "qa_id": "17_4_217",
+      "table_id": "17_4",
+      "question": "Archil kết hôn với con gái của ai?",
+      "expected": "Nodar Tsitsishvili",
+      "predicted": "Davit X (დავით X) (1482 – 1526)",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows LIMIT 8"
+    },
+    {
+      "qa_id": "56_3_238",
+      "table_id": "56_3",
+      "question": "Tòa nhà có chiều cao cao nhất có bao nhiêu tầng?",
+      "expected": "110",
+      "predicted": "110",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c1_num IS NOT NULL ORDER BY c1_num DESC LIMIT 1"
+    },
+    {
+      "qa_id": "38_1_37",
+      "table_id": "38_1",
+      "question": "Kin Yin Cheung có phải là một chủ tịch người Trung Quốc không?",
+      "expected": "Có",
+      "predicted": "Có",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c5_key LIKE ? LIMIT 20"
+    },
+    {
+      "qa_id": "40_1_65",
+      "table_id": "40_1",
+      "question": "Josh Dubnau hoặc Lisa Tarantino có làm chủ tịch tại Hoa Kỳ không?",
+      "expected": "Có",
+      "predicted": "Có",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c5_key LIKE ? LIMIT 20"
+    },
+    {
+      "qa_id": "99919_4_153",
+      "table_id": "99919_4",
+      "question": "Ngô Thị Thanh Ngoan chơi ở cả 2 vị trí đúng không?",
+      "expected": "Không",
+      "predicted": "Có",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c0_num > ? LIMIT 200"
+    },
+    {
+      "qa_id": "99928_4_21",
+      "table_id": "99928_4",
+      "question": "Tất cả người trong danh sách đều từ 50 đến 65 tuổi đúng không?",
+      "expected": "Không",
+      "predicted": "Có",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c4_num >= ? LIMIT 200"
+    },
+    {
+      "qa_id": "99924_3_132",
+      "table_id": "99924_3",
+      "question": "Grenada là quốc gia đạt được hạng 120 và khả năng sống lâu ở nữ đạt 70,3 năm khi nào?",
+      "expected": "Null",
+      "predicted": "39,8",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c0_num IS NOT NULL ORDER BY c0_num DESC LIMIT 1"
+    },
+    {
+      "qa_id": "23_4_88",
+      "table_id": "23_4",
+      "question": "Thứ hạng trong khung giờ của tập phim Pagbabalik ni Loleng là gì?",
+      "expected": "#1",
+      "predicted": "#1",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c1_key LIKE ? LIMIT 12"
+    },
+    {
+      "qa_id": "99931_4_98",
+      "table_id": "99931_4",
+      "question": "Larry Page có năm sinh là bao nhiêu?",
+      "expected": "1973",
+      "predicted": "1",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c1_key LIKE ? LIMIT 200"
+    },
+    {
+      "qa_id": "99913_3_94",
+      "table_id": "99913_3",
+      "question": "Dân tộc nào có dân số thành thị là 1.186 người và dân số nông thôn là 24.174?",
+      "expected": "Dao",
+      "predicted": "Có",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c5_num > ? LIMIT 200"
+    },
+    {
+      "qa_id": "0_0_11",
+      "table_id": "0_0",
+      "question": "Ai là vị chủ tịch thứ 5 nhậm chức?",
+      "expected": "François-Xavier Ortoli",
+      "predicted": "Không tìm thấy bằng chứng phù hợp trong bảng.",
+      "exact": false,
+      "confidence": "Thấp",
+      "sql": "SELECT row_index, * FROM rows WHERE c2_num = ? LIMIT 12"
+    },
+    {
+      "qa_id": "11_1_147",
+      "table_id": "11_1",
+      "question": "Bộ môn tổ chức vào 23 tháng 3 năm 2018 và Khôi đã giành kỷ lục có tên là gì?",
+      "expected": "100m ngửa",
+      "predicted": "Không",
+      "exact": false,
+      "confidence": "Trung bình",
+      "sql": "SELECT row_index, * FROM rows WHERE c0_num = ? LIMIT 200"
+    },
+    {
+      "qa_id": "56_2_39",
+      "table_id": "56_2",
+      "question": "Tòa nhà 28 Phố Liberty còn được gọi là One Chase Manhattan Plaza trước năm nào?",
+      "expected": "2015",
+      "predicted": "1961",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c1_key LIKE ? LIMIT 12"
+    },
+    {
+      "qa_id": "9990_4_78",
+      "table_id": "9990_4",
+      "question": "Nhiệt độ trung bình thấp tháng 7 và 8 là bao nhiêu độ?",
+      "expected": "24.3",
+      "predicted": "0",
+      "exact": false,
+      "confidence": "Trung bình",
+      "sql": "SELECT row_index, * FROM rows WHERE c6_num = ? AND c0_key LIKE ? LIMIT 200"
+    },
+    {
+      "qa_id": "9991_0_2",
+      "table_id": "9991_0",
+      "question": "Tổng lãnh sự quán Anh có số fax là gì?",
+      "expected": "028-38221971/95257\t",
+      "predicted": "Có",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c0_key LIKE ? LIMIT 20"
+    },
+    {
+      "qa_id": "56_4_218",
+      "table_id": "56_4",
+      "question": " Angola thuộc khu vực nào?",
+      "expected": "Trung Phi",
+      "predicted": "Trung Phi",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c4_key LIKE ? LIMIT 12"
+    },
+    {
+      "qa_id": "99921_3_152",
+      "table_id": "99921_3",
+      "question": "Dumb Dumb\tđược ra mắt vào năm nào?",
+      "expected": "2021\t",
+      "predicted": "2021",
+      "exact": true,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c2_key LIKE ? LIMIT 12"
+    },
+    {
+      "qa_id": "0_0_85",
+      "table_id": "0_0",
+      "question": "Romano Prodi đã đảm nhận bao nhiêu nhiệm kỳ?",
+      "expected": "1",
+      "predicted": "14",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows LIMIT 200"
+    },
+    {
+      "qa_id": "40_2_85",
+      "table_id": "40_2",
+      "question": "Pretoria có bao nhiêu tòa nhà cao tầng?",
+      "expected": "11",
+      "predicted": "1",
+      "exact": false,
+      "confidence": "Cao",
+      "sql": "SELECT row_index, * FROM rows WHERE c0_key LIKE ? LIMIT 200"
+    },
+    {
+      "qa_id": "99915_2_23",
+      "table_id": "99915_2",
+      "question": "Quế Võ là khu vực có ít tòa nhà cao từ 50m nhất đúng không?",
+      "expected": "Không",
+      "predicted": "Không",
+      "exact": true,
+      "confidence": "Trung bình",
+      "sql": "SELECT row_index, * FROM rows WHERE c1_num >= ? LIMIT 200"
+    }
+  ]
+}

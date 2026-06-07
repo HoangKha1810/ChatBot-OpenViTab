@@ -1,0 +1,255 @@
+const state = {
+  split: "dev",
+  examples: [],
+  selected: null,
+  table: null,
+  result: null,
+  tab: "plan",
+};
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || response.statusText);
+  }
+  return response.json();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function init() {
+  bindEvents();
+  await loadHealth();
+  await loadExamples();
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+function bindEvents() {
+  $$("#split button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      $$("#split button").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      state.split = button.dataset.split;
+      await loadExamples();
+    });
+  });
+
+  $("#domain").addEventListener("change", loadExamples);
+  $("#search").addEventListener("input", renderExamples);
+  $("#run").addEventListener("click", runPipeline);
+  $("#reload-table").addEventListener("click", () => {
+    if (state.selected) {
+      loadTable(state.selected.table_id);
+    }
+  });
+
+  $$(".tabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      $$(".tabs button").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      state.tab = button.dataset.tab;
+      renderTrace();
+    });
+  });
+}
+
+async function loadHealth() {
+  try {
+    const health = await fetchJson("/api/health");
+    if (!health.ok) {
+      $("#dataset-status").textContent = "Missing data";
+      $("#dataset-status").style.color = "#c2410c";
+      $("#table-title").textContent = health.error;
+      return;
+    }
+    $("#dataset-status").textContent = `${health.dataset.tables} tables`;
+    if (health.models) {
+      const missing = health.models.missing || [];
+      $("#dataset-status").textContent = missing.length ? `Models missing: ${missing.length}` : `${health.dataset.tables} tables · models ok`;
+      $("#dataset-status").style.color = missing.length ? "#c2410c" : "#667085";
+    }
+    const domains = health.dataset.domains || [];
+    $("#domain").innerHTML =
+      '<option value="">Tất cả domain</option>' +
+      domains.map((domain) => `<option value="${escapeHtml(domain)}">${escapeHtml(domain)}</option>`).join("");
+  } catch (error) {
+    $("#dataset-status").textContent = "Error";
+    $("#table-title").textContent = error.message;
+  }
+}
+
+async function loadExamples() {
+  const domain = $("#domain").value;
+  const params = new URLSearchParams({ split: state.split, limit: "120" });
+  if (domain) {
+    params.set("domain", domain);
+  }
+  const payload = await fetchJson(`/api/examples?${params.toString()}`);
+  state.examples = payload.items || [];
+  renderExamples();
+  if (state.examples.length) {
+    selectExample(state.examples[0]);
+  }
+}
+
+function renderExamples() {
+  const query = $("#search").value.trim().toLowerCase();
+  const filtered = state.examples.filter((item) => {
+    const haystack = `${item.question} ${item.expected_answer} ${item.table_title} ${item.table_domain}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+  $("#examples").innerHTML = filtered
+    .slice(0, 80)
+    .map(
+      (item) => `
+      <button class="example ${state.selected?.qa_id === item.qa_id ? "active" : ""}" data-qa="${escapeHtml(item.qa_id)}">
+        <strong>${escapeHtml(item.question)}</strong>
+        <span>${escapeHtml(item.table_title)} · ${escapeHtml(item.table_domain)}</span>
+      </button>
+    `,
+    )
+    .join("");
+
+  $$(".example").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = state.examples.find((example) => example.qa_id === button.dataset.qa);
+      if (item) {
+        selectExample(item);
+      }
+    });
+  });
+}
+
+async function selectExample(item) {
+  state.selected = item;
+  state.result = null;
+  $("#question").value = item.question;
+  $("#qa-id").textContent = item.qa_id;
+  $("#table-id").textContent = item.table_id;
+  $("#domain-label").textContent = item.table_domain || "No domain";
+  $("#expected").textContent = item.expected_answer ? `Đáp án gốc: ${item.expected_answer}` : "";
+  $("#answer").textContent = "Sẵn sàng chạy trên bảng thật.";
+  $("#confidence-label").textContent = "-";
+  $("#confidence-meter").value = 0;
+  $("#latency").textContent = "0 ms";
+  renderExamples();
+  await loadTable(item.table_id);
+  renderTrace();
+}
+
+async function loadTable(tableId) {
+  const table = await fetchJson(`/api/table/${encodeURIComponent(tableId)}`);
+  state.table = table;
+  $("#table-title").textContent = table.title || table.table_id;
+  $("#domain-label").textContent = table.domain || "No domain";
+  $("#row-count").textContent = `${table.row_count} rows`;
+  renderTable();
+}
+
+function renderTable() {
+  if (!state.table) {
+    $("#data-table").innerHTML = "";
+    return;
+  }
+  const headers = state.table.headers || [];
+  const evidenceRows = new Set((state.result?.evidence || []).map((row) => row.row_index));
+  const head = `<thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>`;
+  const body = `<tbody>${(state.table.rows || [])
+    .map((row, index) => {
+      const rowIndex = index + 1;
+      const cells = headers.map((_, cellIndex) => `<td>${escapeHtml(row[cellIndex] || "")}</td>`).join("");
+      return `<tr class="${evidenceRows.has(rowIndex) ? "highlight" : ""}">${cells}</tr>`;
+    })
+    .join("")}</tbody>`;
+  $("#data-table").innerHTML = head + body;
+}
+
+async function runPipeline() {
+  if (!state.selected && !state.table) {
+    return;
+  }
+  $("#run").disabled = true;
+  $("#answer").textContent = "Đang chạy SQL planner, execute và verifier...";
+  try {
+    const payload = {
+      question: $("#question").value,
+      table_id: state.selected?.table_id || state.table.table_id,
+      qa_id: state.selected?.qa_id || null,
+      expected_answer: state.selected?.expected_answer || null,
+    };
+    const result = await fetchJson("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    state.result = result;
+    $("#answer").textContent = result.answer;
+    $("#expected").textContent = result.expected_answer ? `Đáp án gốc: ${result.expected_answer}` : "";
+    $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
+    $("#confidence-meter").value = result.confidence.score;
+    $("#latency").textContent = `${result.latency_ms} ms`;
+    renderTrace();
+    renderTable();
+  } catch (error) {
+    $("#answer").textContent = error.message;
+  } finally {
+    $("#run").disabled = false;
+  }
+}
+
+function renderTrace() {
+  if (!state.result) {
+    $("#trace-body").innerHTML = '<div class="empty">Trace sẽ xuất hiện sau khi chạy pipeline.</div>';
+    return;
+  }
+  if (state.tab === "plan") {
+    const plan = state.result.plan;
+    $("#trace-body").innerHTML = kv({
+      Intent: plan.intent,
+      Operation: plan.operation,
+      "Answer column": plan.answer_column || "-",
+      "Filter column": plan.filter_column || "-",
+      "Filter value": plan.filter_value || "-",
+      "Sort column": plan.sort_column || "-",
+      "Giải thích": plan.explanation || "-",
+    });
+  } else if (state.tab === "sql") {
+    $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.sql_trace, null, 2))}</pre>`;
+  } else if (state.tab === "models") {
+    $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.model_trace || [], null, 2))}</pre>`;
+  } else if (state.tab === "evidence") {
+    $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.evidence, null, 2))}</pre>`;
+  } else if (state.tab === "verifier") {
+    $("#trace-body").innerHTML = `<pre>${escapeHtml(
+      JSON.stringify(
+        {
+          verifier: state.result.verifier,
+          confidence: state.result.confidence,
+        },
+        null,
+        2,
+      ),
+    )}</pre>`;
+  }
+}
+
+function kv(items) {
+  return `<div class="kv">${Object.entries(items)
+    .map(([key, value]) => `<div class="kv-row"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`)
+    .join("")}</div>`;
+}
+
+init();

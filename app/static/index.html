@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vietnamese SQL-Grounded TableQA</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">SQL</div>
+        <div>
+          <h1>Vietnamese TableQA</h1>
+          <p>Open-ViTabQA · SQL-grounded agents</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="split">Split dữ liệu</label>
+        <div class="segmented" id="split">
+          <button class="active" data-split="dev">Dev</button>
+          <button data-split="test">Test</button>
+          <button data-split="train">Train</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="domain">Lọc domain</label>
+        <select id="domain">
+          <option value="">Tất cả domain</option>
+        </select>
+      </div>
+
+      <div class="field search-field">
+        <label for="search">Tìm câu hỏi</label>
+        <input id="search" type="search" placeholder="Nhập từ khóa..." />
+      </div>
+
+      <div class="examples" id="examples"></div>
+    </aside>
+
+    <main class="workspace">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">Demo không train · dữ liệu thật</p>
+          <h2 id="table-title">Đang tải dataset...</h2>
+        </div>
+        <div class="status-pill" id="dataset-status">Loading</div>
+      </section>
+
+      <section class="question-band">
+        <div class="question-meta">
+          <span id="qa-id">QA</span>
+          <span id="table-id">Table</span>
+          <span id="domain-label">Domain</span>
+        </div>
+        <textarea id="question" rows="2" placeholder="Chọn một QA thật hoặc nhập câu hỏi tiếng Việt cho bảng hiện tại"></textarea>
+        <div class="actions">
+          <button id="run" class="primary">
+            <i data-lucide="play"></i>
+            Chạy pipeline
+          </button>
+          <button id="reload-table">
+            <i data-lucide="table-2"></i>
+            Tải bảng
+          </button>
+        </div>
+      </section>
+
+      <section class="answer-grid">
+        <div class="answer-panel">
+          <div class="panel-head">
+            <h3>Câu trả lời</h3>
+            <span id="latency">0 ms</span>
+          </div>
+          <div class="answer" id="answer">Chọn một ví dụ bên trái rồi bấm chạy.</div>
+          <div class="expected" id="expected"></div>
+          <div class="confidence">
+            <div>
+              <span>Confidence</span>
+              <strong id="confidence-label">-</strong>
+            </div>
+            <meter id="confidence-meter" min="0" max="1" value="0"></meter>
+          </div>
+        </div>
+
+        <div class="trace-panel">
+          <div class="tabs">
+            <button class="active" data-tab="plan">Plan</button>
+            <button data-tab="models">Models</button>
+            <button data-tab="sql">SQL</button>
+            <button data-tab="evidence">Evidence</button>
+            <button data-tab="verifier">Verifier</button>
+          </div>
+          <div class="tab-body" id="trace-body"></div>
+        </div>
+      </section>
+
+      <section class="table-section">
+        <div class="panel-head">
+          <h3>Bảng dữ liệu thật</h3>
+          <span id="row-count">0 rows</span>
+        </div>
+        <div class="table-wrap">
+          <table id="data-table"></table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
