@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from threading import Thread
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -62,6 +63,11 @@ class AskRequest(BaseModel):
     qa_id: str | None = None
     expected_answer: str | None = None
     request_id: str | None = None
+
+
+class AskStartResponse(BaseModel):
+    request_id: str
+    status: str
 
 
 @app.get("/")
@@ -166,6 +172,30 @@ def ask(payload: AskRequest) -> dict[str, object]:
     except Exception as exc:
         fail_progress(request_id, str(exc))
         raise
+
+
+@app.post("/api/ask/start", response_model=AskStartResponse)
+def ask_start(payload: AskRequest) -> AskStartResponse:
+    request_id = payload.request_id or f"api-{payload.table_id}"
+    start_progress(request_id, "Received async /api/ask/start request.")
+    thread = Thread(target=_run_ask_job, args=(payload, request_id), daemon=True)
+    thread.start()
+    return AskStartResponse(request_id=request_id, status="running")
+
+
+def _run_ask_job(payload: AskRequest, request_id: str) -> None:
+    try:
+        result = answer_question(
+            table_id=payload.table_id,
+            question=payload.question,
+            qa_id=payload.qa_id,
+            expected_answer=payload.expected_answer,
+            request_id=request_id,
+        )
+        store_result(request_id, result.model_dump())
+        finish_progress(request_id, "Answer ready.")
+    except Exception as exc:
+        fail_progress(request_id, str(exc))
 
 
 @app.post("/api/ask/{qa_id}")

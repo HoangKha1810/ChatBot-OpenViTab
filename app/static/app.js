@@ -250,7 +250,6 @@ async function runPipeline() {
   if (window.lucide) {
     window.lucide.createIcons();
   }
-  startProgressPolling(requestId);
   try {
     const payload = {
       question: $("#question").value,
@@ -259,13 +258,14 @@ async function runPipeline() {
       expected_answer: state.selected?.expected_answer || null,
       request_id: requestId,
     };
-    const result = await fetchJson("/api/ask", {
+    await fetchJson("/api/ask/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    startProgressPolling(requestId);
+    const result = await waitForResult(requestId);
     applyResult(result);
-    await pollProgress(requestId);
     $("#run-status").className = "run-status";
     renderTrace();
     renderTable();
@@ -323,12 +323,40 @@ async function recoverResult(requestId) {
   return false;
 }
 
+async function waitForResult(requestId) {
+  const maxAttempts = 240;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await sleep(900);
+    const progress = await fetchJson(`/api/progress/${encodeURIComponent(requestId)}`);
+    state.progress = progress;
+    renderPipelineInspector();
+    if (state.tab === "progress") {
+      renderProgressTrace();
+    }
+    const last = progress.events?.at(-1);
+    if (last) {
+      $("#run-status").textContent = `[${last.stage}] ${last.message} (${Math.round(last.elapsed_ms)} ms)`;
+    }
+    if (progress.has_result || progress.status === "done") {
+      return fetchJson(`/api/result/${encodeURIComponent(requestId)}`);
+    }
+    if (progress.status === "error") {
+      const message = last?.message || "Pipeline lỗi. Xem terminal để biết chi tiết.";
+      throw new Error(message);
+    }
+  }
+  throw new Error("Pipeline chạy quá lâu qua tunnel. Backend vẫn có thể đang chạy; xem terminal VPS.");
+}
+
 function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function describeError(error) {
   const text = String(error?.message || error || "").trim();
+  if (/HTTP 502|Bad Gateway|Load failed|Failed to fetch/i.test(text)) {
+    return "Tunnel Serveo bị ngắt/timeout tạm thời. Backend vẫn có thể đang chạy; bấm lại hoặc xem tab Progress.";
+  }
   return text || "Kết nối bị ngắt hoặc backend chưa trả response. Xem tab Progress/terminal để biết bước cuối.";
 }
 
