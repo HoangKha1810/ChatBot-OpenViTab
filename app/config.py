@@ -22,7 +22,8 @@ TABLEQA_REQUIRE_MODELS = os.getenv("TABLEQA_REQUIRE_MODELS", "1").strip().lower(
 TABLEQA_REQUIRE_GPU = os.getenv("TABLEQA_REQUIRE_GPU", "0").strip().lower() in {"1", "true", "yes", "on"}
 TABLEQA_STARTUP_CHECKS = os.getenv("TABLEQA_STARTUP_CHECKS", "0").strip().lower() in {"1", "true", "yes", "on"}
 
-SCHEMA_EMBED_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_MODEL", "bge-m3")
+SCHEMA_EMBED_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_MODEL", "nomic-embed-text")
+SCHEMA_EMBED_FALLBACK_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_FALLBACK_MODEL", "nomic-embed-text")
 TEXT_TO_SQL_MODEL = os.getenv("TABLEQA_TEXT_TO_SQL_MODEL", "qwen2.5-coder:14b")
 ANSWER_MODEL = os.getenv("TABLEQA_ANSWER_MODEL", "qwen2.5:7b")
 VERIFIER_MODEL = os.getenv("TABLEQA_VERIFIER_MODEL", "qwen2.5:7b")

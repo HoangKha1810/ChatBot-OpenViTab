@@ -39,7 +39,7 @@ On Vast.ai or another Ubuntu GPU container, use this one command after cloning a
 python3 scripts/run_gpu_demo.py
 ```
 
-The launcher applies an RTX 3090 24GB stable preset, prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, prints `ollama ps`, then starts Uvicorn with:
+The launcher applies an RTX 3090 24GB stable preset, prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, falls back to the stable embedding model if a warm-up fails, prints `ollama ps`, then starts Uvicorn with:
 
 ```text
 TABLEQA_REQUIRE_GPU=1
@@ -116,10 +116,17 @@ Default task models:
 
 | Task | Model | Why |
 | --- | --- | --- |
-| Schema linking | `bge-m3` | Multilingual embedding model, good for Vietnamese headers and aliases. |
+| Schema linking | `nomic-embed-text` | Lightweight and stable on RTX 3090/Vast.ai containers; avoids occasional `bge-m3` Ollama `/api/embed` 500 errors. |
 | Text-to-SQL | `qwen2.5-coder:14b` | Strong enough for SQL while still stable on RTX 3090/A5000 24GB with `num_ctx=4096`. |
 | Answer synthesis | `qwen2.5:7b` | Vietnamese answer quality without forcing another 14B model into 24GB VRAM. |
 | Evidence verifier | `qwen2.5:7b` | Advisory verifier, guarded by deterministic evidence checks. |
+
+If you want to try BGE-M3 for schema linking later:
+
+```bash
+ollama pull bge-m3
+TABLEQA_SCHEMA_EMBED_MODEL=bge-m3 TABLEQA_SCHEMA_EMBED_FALLBACK_MODEL=nomic-embed-text python3 scripts/run_gpu_demo.py
+```
 
 Install on macOS:
 

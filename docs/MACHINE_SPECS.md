@@ -37,7 +37,7 @@ If you want faster local inference or larger models:
 
 Default RTX 3090 / 24 GB models:
 
-- Schema linking: `bge-m3`
+- Schema linking: `nomic-embed-text`
 - Text-to-SQL: `qwen2.5-coder:14b`
 - Answer synthesis/verifier: `qwen2.5:7b`
 

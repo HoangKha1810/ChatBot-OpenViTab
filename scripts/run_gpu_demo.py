@@ -13,16 +13,18 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.config import ANSWER_MODEL, SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, VERIFIER_MODEL
+from app.config import ANSWER_MODEL, SCHEMA_EMBED_FALLBACK_MODEL, SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, VERIFIER_MODEL
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-MODELS = list(dict.fromkeys([SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]))
+MODELS = list(dict.fromkeys([SCHEMA_EMBED_MODEL, SCHEMA_EMBED_FALLBACK_MODEL, TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]))
 
 RTX_3090_DEFAULT_ENV = {
     "TABLEQA_REQUIRE_GPU": "1",
     "TABLEQA_REQUIRE_MODELS": "1",
     "TABLEQA_USE_MODELS": "1",
     "TABLEQA_STARTUP_CHECKS": "1",
+    "TABLEQA_SCHEMA_EMBED_MODEL": "nomic-embed-text",
+    "TABLEQA_SCHEMA_EMBED_FALLBACK_MODEL": "nomic-embed-text",
     "TABLEQA_NUM_CTX": "4096",
     "TABLEQA_NUM_PREDICT": "384",
     "TABLEQA_TOP_P": "0.75",
@@ -148,18 +150,8 @@ def list_models() -> list[str]:
 
 
 def warmup_ollama() -> None:
-    print(f"[TableQA] Warming up embedding model {SCHEMA_EMBED_MODEL}...")
-    response = requests.post(
-        f"{OLLAMA_BASE_URL}/api/embed",
-        json={
-            "model": SCHEMA_EMBED_MODEL,
-            "input": ["kiểm tra GPU cho Vietnamese TableQA"],
-            "keep_alive": os.environ["TABLEQA_OLLAMA_KEEP_ALIVE"],
-        },
-        timeout=240,
-    )
-    response.raise_for_status()
-    print("[TableQA] Embedding warm-up OK.")
+    active_embed_model = warmup_embedding_model()
+    os.environ["TABLEQA_SCHEMA_EMBED_MODEL"] = active_embed_model
 
     for model in dict.fromkeys([TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]):
         print(f"[TableQA] Warming up chat model {model}...")
@@ -186,6 +178,32 @@ def warmup_ollama() -> None:
         )
         response.raise_for_status()
         print(f"[TableQA] Chat warm-up OK: {model}.")
+
+
+def warmup_embedding_model() -> str:
+    candidates = list(dict.fromkeys([os.environ["TABLEQA_SCHEMA_EMBED_MODEL"], os.environ["TABLEQA_SCHEMA_EMBED_FALLBACK_MODEL"]]))
+    last_error = None
+    for model in candidates:
+        print(f"[TableQA] Warming up embedding model {model}...")
+        try:
+            response = requests.post(
+                f"{OLLAMA_BASE_URL}/api/embed",
+                json={
+                    "model": model,
+                    "input": ["kiểm tra GPU cho Vietnamese TableQA"],
+                    "keep_alive": os.environ["TABLEQA_OLLAMA_KEEP_ALIVE"],
+                },
+                timeout=240,
+            )
+            response.raise_for_status()
+            print(f"[TableQA] Embedding warm-up OK: {model}.")
+            return model
+        except Exception as exc:
+            last_error = exc
+            print(f"[TableQA] WARNING: embedding warm-up failed for {model}: {exc}")
+    print(f"[TableQA] WARNING: all embedding warm-ups failed; startup will continue and retry during requests. Last error: {last_error}")
+    os.environ["TABLEQA_STARTUP_CHECKS"] = "0"
+    return candidates[-1]
 
 
 def print_ollama_ps() -> None:

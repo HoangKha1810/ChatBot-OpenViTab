@@ -18,6 +18,7 @@ from app.config import (
     OLLAMA_TEMPERATURE,
     OLLAMA_TIMEOUT_SECONDS,
     OLLAMA_TOP_P,
+    SCHEMA_EMBED_FALLBACK_MODEL,
     SCHEMA_EMBED_MODEL,
     TABLEQA_REQUIRE_GPU,
     TABLEQA_REQUIRE_MODELS,
@@ -39,6 +40,7 @@ class ModelSettings:
     backend: str = "ollama"
     base_url: str = OLLAMA_BASE_URL
     schema_embed_model: str = SCHEMA_EMBED_MODEL
+    schema_embed_fallback_model: str = SCHEMA_EMBED_FALLBACK_MODEL
     text_to_sql_model: str = TEXT_TO_SQL_MODEL
     answer_model: str = ANSWER_MODEL
     verifier_model: str = VERIFIER_MODEL
@@ -52,6 +54,7 @@ class ModelSettings:
     def required_models(self) -> tuple[str, ...]:
         return (
             self.schema_embed_model,
+            self.schema_embed_fallback_model,
             self.text_to_sql_model,
             self.answer_model,
             self.verifier_model,
@@ -99,6 +102,7 @@ class OllamaRuntime:
             "missing": missing,
             "task_models": {
                 "schema_linking": self.settings.schema_embed_model,
+                "schema_linking_fallback": self.settings.schema_embed_fallback_model,
                 "text_to_sql": self.settings.text_to_sql_model,
                 "answer_synthesis": self.settings.answer_model,
                 "verification": self.settings.verifier_model,
@@ -270,6 +274,23 @@ class OllamaRuntime:
     def embed(self, model: str, texts: list[str], request_id: str = "ollama") -> tuple[list[list[float]], float]:
         add_progress(request_id, "ollama_embed", f"Calling {model} for {len(texts)} text(s).")
         started = time.perf_counter()
+        try:
+            embeddings = self._embed_once(model, texts)
+            latency = round((time.perf_counter() - started) * 1000, 2)
+            add_progress(request_id, "ollama_embed", f"{model} completed in {latency} ms.")
+            return embeddings, latency
+        except Exception as exc:
+            fallback = self.settings.schema_embed_fallback_model
+            if not fallback or fallback == model or model != self.settings.schema_embed_model:
+                raise
+            add_progress(request_id, "ollama_embed", f"{model} failed ({exc}); retrying with fallback {fallback}.")
+            fallback_started = time.perf_counter()
+            embeddings = self._embed_once(fallback, texts)
+            latency = round((time.perf_counter() - fallback_started) * 1000, 2)
+            add_progress(request_id, "ollama_embed", f"{fallback} fallback completed in {latency} ms.")
+            return embeddings, latency
+
+    def _embed_once(self, model: str, texts: list[str]) -> list[list[float]]:
         response = requests.post(
             f"{self.settings.base_url}/api/embed",
             json={"model": model, "input": texts, "keep_alive": self.settings.keep_alive},
@@ -280,9 +301,7 @@ class OllamaRuntime:
         embeddings = payload.get("embeddings")
         if not isinstance(embeddings, list):
             raise ModelUnavailableError(f"Ollama embed response không hợp lệ cho model {model}.")
-        latency = round((time.perf_counter() - started) * 1000, 2)
-        add_progress(request_id, "ollama_embed", f"{model} completed in {latency} ms.")
-        return embeddings, latency
+        return embeddings
 
 
 def get_runtime() -> OllamaRuntime:
