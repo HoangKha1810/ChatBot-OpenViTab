@@ -9,7 +9,7 @@ Recommended rental:
 - CPU: 6-8 vCPU recommended, 4 vCPU minimum
 - RAM: 32 GB recommended, 16 GB minimum
 - Disk: 80 GB SSD recommended, 40 GB minimum
-- GPU: NVIDIA RTX 3090 24 GB, RTX A5000 24 GB, L4 24 GB, A10G 24 GB, or RTX 4090 24 GB
+- GPU: NVIDIA RTX 3090 24 GB, RTX A5000 24 GB, L4 24 GB, A10G 24 GB, RTX 4090 24 GB, or Tesla V100 with the V100 profile below
 - OS: Ubuntu 22.04 LTS
 - Python: 3.11
 
@@ -41,7 +41,7 @@ Default RTX 3090 / 24 GB models:
 - Text-to-SQL: `qwen2.5-coder:14b`
 - Answer synthesis/verifier: `qwen2.5:7b`
 
-Stable 24 GB Ollama preset:
+Stable RTX 3090/A5000 24 GB Ollama preset:
 
 - `TABLEQA_NUM_CTX=4096`
 - `TABLEQA_NUM_PREDICT=384`
@@ -51,7 +51,18 @@ Stable 24 GB Ollama preset:
 - `OLLAMA_KV_CACHE_TYPE=q8_0`
 - `OLLAMA_FLASH_ATTENTION=1`
 
-This preset prioritises demo stability over maximum throughput. It avoids loading multiple large models at once and keeps context large enough for schema prompts without pushing RTX 3090 VRAM too hard.
+Stable Tesla V100 / Volta preset:
+
+- `TABLEQA_GPU_PROFILE=v100`
+- `TABLEQA_NUM_CTX=3072`
+- `TABLEQA_NUM_PREDICT=256`
+- `TABLEQA_OLLAMA_KEEP_ALIVE=3m`
+- `OLLAMA_NUM_PARALLEL=1`
+- `OLLAMA_MAX_LOADED_MODELS=1`
+- `OLLAMA_KV_CACHE_TYPE=f16`
+- `OLLAMA_FLASH_ATTENTION=0`
+
+The V100 preset prioritises compatibility. If Ollama still returns `CUDA error: device kernel image is invalid`, run `bash scripts/fix_v100_ollama.sh` to pin an older Ollama build in the container, then rerun `TABLEQA_GPU_PROFILE=v100 python3 scripts/run_gpu_demo.py`.
 
 Optional larger model swaps:
 

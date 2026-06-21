@@ -7,7 +7,7 @@ This project implements the demo artefact described in `Vietnamese_TableQA_Final
 - Real Open-ViTabQA downloader from `DuzDao/Open-ViTabQA`
 - Table normalisation with merged-header handling
 - SQLite table generation per `table_id`
-- Vietnamese schema linker with `bge-m3` embeddings
+- Vietnamese schema linker with `nomic-embed-text` embeddings
 - Text-to-SQL agent with `qwen2.5-coder:14b`
 - Answer synthesis and verifier agents with `qwen2.5:7b`
 - SQL execution with evidence rows, verifier, and confidence score
@@ -39,19 +39,36 @@ On Vast.ai or another Ubuntu GPU container, use this one command after cloning a
 python3 scripts/run_gpu_demo.py
 ```
 
-The launcher applies an RTX 3090 24GB stable preset, prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, falls back to the stable embedding model if a warm-up fails, prints `ollama ps`, then starts Uvicorn with:
+The launcher detects the NVIDIA GPU, applies a safe profile, prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, restarts Ollama once if inference returns 500, prints `ollama ps`, then starts Uvicorn.
+
+For Tesla V100 / Volta GPUs it forces:
 
 ```text
+TABLEQA_GPU_PROFILE=v100
+OLLAMA_FLASH_ATTENTION=0
+OLLAMA_KV_CACHE_TYPE=f16
+TABLEQA_NUM_CTX=3072
+TABLEQA_NUM_PREDICT=256
+```
+
+For RTX 3090/A5000-class 24GB GPUs it uses:
+
+```text
+TABLEQA_GPU_PROFILE=rtx3090
 TABLEQA_REQUIRE_GPU=1
 TABLEQA_STARTUP_CHECKS=1
+TABLEQA_STRICT_WARMUP=0
 TABLEQA_NUM_CTX=4096
 TABLEQA_NUM_PREDICT=384
 OLLAMA_NUM_PARALLEL=1
 OLLAMA_MAX_LOADED_MODELS=1
 OLLAMA_KV_CACHE_TYPE=q8_0
+OLLAMA_FLASH_ATTENTION=1
 ```
 
 During a browser run, the Uvicorn terminal prints `[TableQA]` stage logs and the UI shows a live Pipeline Inspector with the generated SQL, execution order, evidence rows, and verifier status.
+
+Vast.ai/KVM containers usually do not run `systemd`, so `sudo systemctl enable --now ollama` can fail. That is fine. Use `python3 scripts/run_gpu_demo.py`; it starts `ollama serve` directly and writes the Ollama log to `data/processed/ollama.log`.
 
 For manual `uvicorn` runs on a 24GB GPU, copy the example environment first:
 
@@ -116,8 +133,8 @@ Default task models:
 
 | Task | Model | Why |
 | --- | --- | --- |
-| Schema linking | `nomic-embed-text` | Lightweight and stable on RTX 3090/Vast.ai containers; avoids occasional `bge-m3` Ollama `/api/embed` 500 errors. |
-| Text-to-SQL | `qwen2.5-coder:14b` | Strong enough for SQL while still stable on RTX 3090/A5000 24GB with `num_ctx=4096`. |
+| Schema linking | `nomic-embed-text` | Lightweight and stable on Vast.ai containers; avoids occasional `bge-m3` Ollama `/api/embed` 500 errors. |
+| Text-to-SQL | `qwen2.5-coder:14b` | Strong enough for SQL while still stable with one Ollama model loaded at a time. |
 | Answer synthesis | `qwen2.5:7b` | Vietnamese answer quality without forcing another 14B model into 24GB VRAM. |
 | Evidence verifier | `qwen2.5:7b` | Advisory verifier, guarded by deterministic evidence checks. |
 
@@ -134,6 +151,51 @@ Install on macOS:
 brew install ollama
 ollama serve
 python scripts/setup_ollama_models.py
+```
+
+If Ollama says the service is not started on an Ubuntu container, do not use `systemctl`. Start it manually:
+
+```bash
+pkill -x ollama || true
+OLLAMA_HOST=127.0.0.1:11434 OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KV_CACHE_TYPE=f16 OLLAMA_FLASH_ATTENTION=0 nohup ollama serve > data/processed/ollama.log 2>&1 &
+sleep 5
+curl http://127.0.0.1:11434/api/tags
+```
+
+Then run:
+
+```bash
+python3 scripts/run_gpu_demo.py
+```
+
+### V100 / `device kernel image is invalid`
+
+Tesla V100 is a Volta GPU. If Ollama returns:
+
+```text
+CUDA error: device kernel image is invalid
+```
+
+first run the demo through the launcher so it disables Flash Attention and restarts Ollama:
+
+```bash
+pkill -x ollama || true
+pkill -f ollama_llama_server || true
+TABLEQA_GPU_PROFILE=v100 python3 scripts/run_gpu_demo.py
+```
+
+If the same CUDA kernel error still appears, use an older Ollama build for the V100 container:
+
+```bash
+bash scripts/fix_v100_ollama.sh
+TABLEQA_GPU_PROFILE=v100 python3 scripts/run_gpu_demo.py
+```
+
+To try a different Ollama version:
+
+```bash
+OLLAMA_VERSION=0.23.0 bash scripts/fix_v100_ollama.sh
+TABLEQA_GPU_PROFILE=v100 python3 scripts/run_gpu_demo.py
 ```
 
 The app defaults to requiring real models. If Ollama or a model is missing, API calls return `503` with the missing model list instead of producing mock output.

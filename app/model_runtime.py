@@ -178,9 +178,9 @@ class OllamaRuntime:
             ]
         ):
             add_progress(request_id, "warmup", f"Warming up chat model {model}.")
-            response = requests.post(
-                f"{self.settings.base_url}/api/chat",
-                json={
+            self._post_ollama_json(
+                "/api/chat",
+                {
                     "model": model,
                     "messages": [
                         {"role": "system", "content": "Return JSON only."},
@@ -197,9 +197,9 @@ class OllamaRuntime:
                         "seed": 42,
                     },
                 },
-                timeout=OLLAMA_TIMEOUT_SECONDS,
+                request_id,
+                "warmup",
             )
-            response.raise_for_status()
             add_progress(request_id, "warmup", f"{model} warm-up OK.")
 
     def ensure_ollama_gpu_loaded(self, request_id: str = "startup") -> None:
@@ -259,12 +259,7 @@ class OllamaRuntime:
                 "seed": 42,
             },
         }
-        response = requests.post(
-            f"{self.settings.base_url}/api/chat",
-            json=payload,
-            timeout=OLLAMA_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
+        response = self._post_ollama_json("/api/chat", payload, request_id, "ollama_chat")
         content = response.json().get("message", {}).get("content", "")
         parsed = _parse_json_object(content)
         latency = round((time.perf_counter() - started) * 1000, 2)
@@ -275,7 +270,7 @@ class OllamaRuntime:
         add_progress(request_id, "ollama_embed", f"Calling {model} for {len(texts)} text(s).")
         started = time.perf_counter()
         try:
-            embeddings = self._embed_once(model, texts)
+            embeddings = self._embed_once(model, texts, request_id)
             latency = round((time.perf_counter() - started) * 1000, 2)
             add_progress(request_id, "ollama_embed", f"{model} completed in {latency} ms.")
             return embeddings, latency
@@ -285,23 +280,51 @@ class OllamaRuntime:
                 raise
             add_progress(request_id, "ollama_embed", f"{model} failed ({exc}); retrying with fallback {fallback}.")
             fallback_started = time.perf_counter()
-            embeddings = self._embed_once(fallback, texts)
+            embeddings = self._embed_once(fallback, texts, request_id)
             latency = round((time.perf_counter() - fallback_started) * 1000, 2)
             add_progress(request_id, "ollama_embed", f"{fallback} fallback completed in {latency} ms.")
             return embeddings, latency
 
-    def _embed_once(self, model: str, texts: list[str]) -> list[list[float]]:
-        response = requests.post(
-            f"{self.settings.base_url}/api/embed",
-            json={"model": model, "input": texts, "keep_alive": self.settings.keep_alive},
-            timeout=OLLAMA_TIMEOUT_SECONDS,
+    def _embed_once(self, model: str, texts: list[str], request_id: str) -> list[list[float]]:
+        response = self._post_ollama_json(
+            "/api/embed",
+            {"model": model, "input": texts, "keep_alive": self.settings.keep_alive},
+            request_id,
+            "ollama_embed",
         )
-        response.raise_for_status()
         payload = response.json()
         embeddings = payload.get("embeddings")
         if not isinstance(embeddings, list):
             raise ModelUnavailableError(f"Ollama embed response không hợp lệ cho model {model}.")
         return embeddings
+
+    def _post_ollama_json(
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+        request_id: str,
+        stage: str,
+        attempts: int = 2,
+    ) -> requests.Response:
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = requests.post(
+                    f"{self.settings.base_url}{endpoint}",
+                    json=payload,
+                    timeout=OLLAMA_TIMEOUT_SECONDS,
+                )
+                response.raise_for_status()
+                return response
+            except requests.RequestException as exc:
+                last_error = exc
+                detail = _describe_response_error(exc)
+                if attempt < attempts:
+                    add_progress(request_id, stage, f"{endpoint} failed on attempt {attempt}; retrying. {detail}")
+                    time.sleep(1.5)
+                    continue
+                raise ModelUnavailableError(f"Ollama {endpoint} failed after {attempts} attempts. {detail}") from exc
+        raise ModelUnavailableError(f"Ollama {endpoint} failed: {last_error}")
 
 
 def get_runtime() -> OllamaRuntime:
@@ -322,3 +345,13 @@ def _parse_json_object(content: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Model không trả về JSON object.")
     return data
+
+
+def _describe_response_error(exc: requests.RequestException) -> str:
+    response = getattr(exc, "response", None)
+    if response is None:
+        return str(exc)
+    body = (response.text or "").strip().replace("\n", " ")
+    if len(body) > 500:
+        body = f"{body[:500]}..."
+    return f"{exc}; body={body or '<empty>'}"

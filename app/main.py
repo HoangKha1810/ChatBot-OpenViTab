@@ -7,11 +7,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.config import MAX_TABLE_PREVIEW_ROWS, STATIC_DIR, TABLEQA_STARTUP_CHECKS
+from app.config import MAX_TABLE_PREVIEW_ROWS, STATIC_DIR, TABLEQA_STARTUP_CHECKS, TABLEQA_STRICT_WARMUP
 from app.data_loader import DatasetNotFoundError, dataset_stats, get_table, load_qas
 from app.model_runtime import ModelUnavailableError, get_runtime
 from app.pipeline import answer_qa, answer_question
-from app.progress import fail_progress, finish_progress, get_progress, get_result, start_progress, store_result
+from app.progress import add_progress, fail_progress, finish_progress, get_progress, get_result, start_progress, store_result
 
 
 @asynccontextmanager
@@ -21,8 +21,27 @@ async def lifespan(app: FastAPI):
         runtime = get_runtime()
         runtime.ensure_gpu("startup")
         runtime.ensure_ready("startup")
-        runtime.warmup("startup")
-        runtime.ensure_ollama_gpu_loaded("startup")
+        warmup_ok = True
+        try:
+            runtime.warmup("startup")
+        except Exception as exc:
+            warmup_ok = False
+            add_progress(
+                "startup",
+                "warmup",
+                f"WARNING: Ollama warm-up failed but the web app will still start. First request will retry. Error: {exc}",
+            )
+            if TABLEQA_STRICT_WARMUP:
+                raise
+        if warmup_ok:
+            try:
+                runtime.ensure_ollama_gpu_loaded("startup")
+            except ModelUnavailableError as exc:
+                add_progress("startup", "gpu", f"WARNING: GPU load verification failed: {exc}")
+                if TABLEQA_STRICT_WARMUP:
+                    raise
+        else:
+            add_progress("startup", "gpu", "Skipped `ollama ps` GPU-loaded check because warm-up did not complete.")
         finish_progress("startup", "Startup checks passed.")
     yield
 
