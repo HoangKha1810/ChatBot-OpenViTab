@@ -10,6 +10,49 @@ const state = {
   tab: "plan",
 };
 
+const PIPELINE_STEPS = [
+  {
+    label: "Nhận request & load bảng",
+    stages: ["start", "load_table"],
+    idle: "Chờ gửi câu hỏi tới backend.",
+  },
+  {
+    label: "Kiểm tra GPU/Ollama",
+    stages: ["gpu", "models", "warmup"],
+    idle: "Kiểm tra runtime và model local.",
+  },
+  {
+    label: "Planner tạo SQL ứng viên",
+    stages: ["planner"],
+    idle: "Tách intent, cột trả lời, cột lọc/sắp xếp.",
+  },
+  {
+    label: "Schema linking",
+    stages: ["schema_linking", "ollama_embed"],
+    idle: "Rank cột liên quan bằng embedding.",
+  },
+  {
+    label: "Text-to-SQL validate",
+    stages: ["text_to_sql"],
+    idle: "Model kiểm tra/sửa SQL ứng viên.",
+  },
+  {
+    label: "Execute SQL",
+    stages: ["execute_sql"],
+    idle: "Chạy SQL trên SQLite để lấy evidence rows.",
+  },
+  {
+    label: "Answer synthesis",
+    stages: ["answer"],
+    idle: "Sinh câu trả lời chỉ dựa trên evidence.",
+  },
+  {
+    label: "Verifier & confidence",
+    stages: ["verifier", "confidence", "done"],
+    idle: "Kiểm chứng evidence và tính confidence.",
+  },
+];
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -68,10 +111,7 @@ function bindEvents() {
 
   $$(".tabs button").forEach((button) => {
     button.addEventListener("click", () => {
-      $$(".tabs button").forEach((item) => item.classList.remove("active"));
-      button.classList.add("active");
-      state.tab = button.dataset.tab;
-      renderTrace();
+      setActiveTab(button.dataset.tab);
     });
   });
 }
@@ -146,6 +186,8 @@ function renderExamples() {
 async function selectExample(item) {
   state.selected = item;
   state.result = null;
+  state.progress = null;
+  state.requestId = null;
   $("#question").value = item.question;
   $("#qa-id").textContent = item.qa_id;
   $("#table-id").textContent = item.table_id;
@@ -157,6 +199,7 @@ async function selectExample(item) {
   $("#confidence-label").textContent = "-";
   $("#confidence-meter").value = 0;
   $("#latency").textContent = "0 ms";
+  renderPipelineInspector();
   renderExamples();
   await loadTable(item.table_id);
   renderTrace();
@@ -197,11 +240,13 @@ async function runPipeline() {
   state.requestId = requestId;
   state.progress = { status: "running", events: [] };
   stopProgressPolling();
+  setActiveTab("progress");
   $("#run").disabled = true;
   $("#run").innerHTML = '<i data-lucide="loader-circle"></i> Đang chạy...';
   $("#answer").textContent = "Đang chạy SQL planner, execute và verifier...";
   $("#run-status").textContent = "Trạng thái: gửi request tới backend...";
   $("#run-status").className = "run-status running";
+  renderPipelineInspector();
   if (window.lucide) {
     window.lucide.createIcons();
   }
@@ -254,6 +299,7 @@ function applyResult(result) {
   $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
   $("#confidence-meter").value = result.confidence.score;
   $("#latency").textContent = `${result.latency_ms} ms`;
+  renderPipelineInspector();
 }
 
 async function recoverResult(requestId) {
@@ -292,6 +338,10 @@ function renderTrace() {
       renderProgressTrace();
       return;
     }
+    if (state.tab === "sql") {
+      renderLiveSqlTrace();
+      return;
+    }
     $("#trace-body").innerHTML = '<div class="empty">Trace sẽ xuất hiện sau khi chạy pipeline.</div>';
     return;
   }
@@ -307,7 +357,7 @@ function renderTrace() {
       "Giải thích": plan.explanation || "-",
     });
   } else if (state.tab === "sql") {
-    $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.sql_trace, null, 2))}</pre>`;
+    renderSqlTrace();
   } else if (state.tab === "models") {
     $("#trace-body").innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.model_trace || [], null, 2))}</pre>`;
   } else if (state.tab === "progress") {
@@ -344,6 +394,7 @@ async function pollProgress(requestId) {
   try {
     const progress = await fetchJson(`/api/progress/${encodeURIComponent(requestId)}`);
     state.progress = progress;
+    renderPipelineInspector();
     const last = progress.events?.at(-1);
     if (last) {
       $("#run-status").textContent = `[${last.stage}] ${last.message} (${Math.round(last.elapsed_ms)} ms)`;
@@ -372,6 +423,177 @@ function renderProgressTrace() {
       `,
     )
     .join("")}</div>`;
+}
+
+function setActiveTab(tab) {
+  state.tab = tab;
+  $$(".tabs button").forEach((item) => {
+    item.classList.toggle("active", item.dataset.tab === tab);
+  });
+  renderTrace();
+}
+
+function renderPipelineInspector() {
+  const stepper = $("#pipeline-steps");
+  if (!stepper) {
+    return;
+  }
+  const events = state.progress?.events || [];
+  const latest = events.at(-1);
+  const latestIndex = latest ? eventStepIndex(latest, events.length - 1, events) : -1;
+  const progressStatus = state.progress?.status || (state.result ? "done" : "idle");
+  const isDone = Boolean(state.result) || progressStatus === "done";
+  const isError = progressStatus === "error";
+
+  const doneCount = isDone
+    ? PIPELINE_STEPS.length
+    : PIPELINE_STEPS.filter((_, index) => getStepStatus(index, latestIndex, isDone, isError) === "done").length;
+  $("#step-count").textContent = `${doneCount}/${PIPELINE_STEPS.length}`;
+
+  const pill = $("#pipeline-stage-pill");
+  pill.className = `stage-pill ${isError ? "error" : isDone ? "done" : latest ? "running" : ""}`;
+  if (isError) {
+    pill.textContent = "Pipeline lỗi";
+  } else if (isDone) {
+    pill.textContent = "Hoàn tất";
+  } else if (latest && latestIndex >= 0) {
+    pill.textContent = `Đang chạy: ${PIPELINE_STEPS[latestIndex].label}`;
+  } else {
+    pill.textContent = "Chưa chạy";
+  }
+
+  stepper.innerHTML = PIPELINE_STEPS.map((step, index) => {
+    const stepEvents = events.filter((event, eventIndex) => eventStepIndex(event, eventIndex, events) === index);
+    const last = stepEvents.at(-1);
+    const status = getStepStatus(index, latestIndex, isDone, isError);
+    return `
+      <div class="pipeline-step ${status}">
+        <div class="step-index">${index + 1}</div>
+        <div>
+          <div class="step-label">${escapeHtml(step.label)}</div>
+          <div class="step-message">${escapeHtml(last?.message || step.idle)}</div>
+          <div class="step-time">${last ? `${Math.round(last.elapsed_ms)} ms` : statusText(status)}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const sqlInfo = getLiveSqlInfo();
+  $("#sql-source").textContent = sqlInfo.source;
+  $("#live-sql").textContent = sqlInfo.sql;
+  $("#live-sql-meta").innerHTML = sqlInfo.meta;
+}
+
+function eventStepIndex(event, eventIndex, events) {
+  if (event.stage === "ollama_chat") {
+    for (let index = eventIndex - 1; index >= 0; index -= 1) {
+      if (["text_to_sql", "answer", "verifier"].includes(events[index].stage)) {
+        return PIPELINE_STEPS.findIndex((step) => step.stages.includes(events[index].stage));
+      }
+    }
+    return PIPELINE_STEPS.findIndex((step) => step.stages.includes("text_to_sql"));
+  }
+  return PIPELINE_STEPS.findIndex((step) => step.stages.includes(event.stage));
+}
+
+function getStepStatus(index, latestIndex, isDone, isError) {
+  if (isDone) {
+    return "done";
+  }
+  if (latestIndex < 0) {
+    return "pending";
+  }
+  if (isError && index === latestIndex) {
+    return "error";
+  }
+  if (index < latestIndex) {
+    return "done";
+  }
+  if (index === latestIndex) {
+    return "running";
+  }
+  return "pending";
+}
+
+function statusText(status) {
+  if (status === "done") return "Đã xong";
+  if (status === "running") return "Đang chạy";
+  if (status === "error") return "Lỗi";
+  return "Chờ";
+}
+
+function getLiveSqlInfo() {
+  if (state.result?.sql_trace?.sql) {
+    const trace = state.result.sql_trace;
+    const params = JSON.stringify(trace.params || []);
+    const repair = trace.repaired ? "Có repair/sửa SQL" : "Không cần repair";
+    const notes = (trace.repair_notes || []).length ? `<br>${escapeHtml(trace.repair_notes.join(" | "))}` : "";
+    return {
+      source: "Final SQL",
+      sql: trace.sql,
+      meta: `Params: <code>${escapeHtml(params)}</code> · ${escapeHtml(repair)}${notes}`,
+    };
+  }
+
+  const events = state.progress?.events || [];
+  const patterns = [
+    { label: "Final SQL", pattern: /Final SQL:\s*(.*)$/i },
+    { label: "SQL đang execute", pattern: /Executing SQL:\s*(.*)$/i },
+    { label: "Fallback SQL", pattern: /Fallback SQL:\s*(.*)$/i },
+    { label: "Candidate SQL", pattern: /Candidate SQL:\s*(.*)$/i },
+  ];
+  for (const event of [...events].reverse()) {
+    for (const item of patterns) {
+      const match = String(event.message || "").match(item.pattern);
+      if (match) {
+        return {
+          source: item.label,
+          sql: match[1],
+          meta: `Stage: <code>${escapeHtml(event.stage)}</code> · ${Math.round(event.elapsed_ms)} ms`,
+        };
+      }
+    }
+  }
+  return {
+    source: "Chưa có SQL",
+    sql: "SQL sẽ xuất hiện sau bước Planner/Text-to-SQL.",
+    meta: "Bấm “Chạy pipeline” để xem SQL ứng viên và SQL final.",
+  };
+}
+
+function renderLiveSqlTrace() {
+  const sqlInfo = getLiveSqlInfo();
+  $("#trace-body").innerHTML = `
+    <div class="sql-detail">
+      <div class="sql-card">
+        <span>${escapeHtml(sqlInfo.source)}</span>
+        <pre class="sql-live">${escapeHtml(sqlInfo.sql)}</pre>
+        <p>${sqlInfo.meta}</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderSqlTrace() {
+  const trace = state.result.sql_trace;
+  const params = JSON.stringify(trace.params || [], null, 2);
+  const repairNotes = (trace.repair_notes || []).length ? trace.repair_notes.join("\n") : "Không có repair notes.";
+  $("#trace-body").innerHTML = `
+    <div class="sql-detail">
+      <div class="sql-card">
+        <span>Final SQL dùng để query SQLite</span>
+        <pre class="sql-live">${escapeHtml(trace.sql)}</pre>
+      </div>
+      <div class="sql-card compact">
+        <span>Params</span>
+        <pre>${escapeHtml(params)}</pre>
+      </div>
+      <div class="sql-card compact">
+        <span>Repair / fallback</span>
+        <pre>${escapeHtml(trace.repaired ? repairNotes : "Không cần sửa SQL.")}</pre>
+      </div>
+    </div>
+  `;
 }
 
 function kv(items) {

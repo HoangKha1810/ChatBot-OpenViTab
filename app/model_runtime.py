@@ -12,7 +12,12 @@ import requests
 from app.config import (
     ANSWER_MODEL,
     OLLAMA_BASE_URL,
+    OLLAMA_KEEP_ALIVE,
+    OLLAMA_NUM_CTX,
+    OLLAMA_NUM_PREDICT,
+    OLLAMA_TEMPERATURE,
     OLLAMA_TIMEOUT_SECONDS,
+    OLLAMA_TOP_P,
     SCHEMA_EMBED_MODEL,
     TABLEQA_REQUIRE_GPU,
     TABLEQA_REQUIRE_MODELS,
@@ -37,6 +42,11 @@ class ModelSettings:
     text_to_sql_model: str = TEXT_TO_SQL_MODEL
     answer_model: str = ANSWER_MODEL
     verifier_model: str = VERIFIER_MODEL
+    keep_alive: str = OLLAMA_KEEP_ALIVE
+    num_ctx: int = OLLAMA_NUM_CTX
+    num_predict: int = OLLAMA_NUM_PREDICT
+    temperature: float = OLLAMA_TEMPERATURE
+    top_p: float = OLLAMA_TOP_P
 
     @property
     def required_models(self) -> tuple[str, ...]:
@@ -92,6 +102,13 @@ class OllamaRuntime:
                 "text_to_sql": self.settings.text_to_sql_model,
                 "answer_synthesis": self.settings.answer_model,
                 "verification": self.settings.verifier_model,
+            },
+            "ollama_options": {
+                "keep_alive": self.settings.keep_alive,
+                "num_ctx": self.settings.num_ctx,
+                "num_predict": self.settings.num_predict,
+                "temperature": self.settings.temperature,
+                "top_p": self.settings.top_p,
             },
         }
 
@@ -167,7 +184,14 @@ class OllamaRuntime:
                     ],
                     "stream": False,
                     "format": "json",
-                    "options": {"temperature": 0},
+                    "keep_alive": self.settings.keep_alive,
+                    "options": {
+                        "temperature": self.settings.temperature,
+                        "top_p": self.settings.top_p,
+                        "num_ctx": self.settings.num_ctx,
+                        "num_predict": 64,
+                        "seed": 42,
+                    },
                 },
                 timeout=OLLAMA_TIMEOUT_SECONDS,
             )
@@ -208,11 +232,12 @@ class OllamaRuntime:
         model: str,
         system: str,
         user: str,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         request_id: str = "ollama",
     ) -> tuple[dict[str, Any], float, str]:
         add_progress(request_id, "ollama_chat", f"Calling {model}.")
         started = time.perf_counter()
+        temperature = self.settings.temperature if temperature is None else temperature
         payload = {
             "model": model,
             "messages": [
@@ -221,12 +246,12 @@ class OllamaRuntime:
             ],
             "stream": False,
             "format": "json",
-            "keep_alive": "10m",
+            "keep_alive": self.settings.keep_alive,
             "options": {
                 "temperature": temperature,
-                "top_p": 0.8,
-                "num_ctx": 8192,
-                "num_predict": 512,
+                "top_p": self.settings.top_p,
+                "num_ctx": self.settings.num_ctx,
+                "num_predict": self.settings.num_predict,
                 "seed": 42,
             },
         }
@@ -247,7 +272,7 @@ class OllamaRuntime:
         started = time.perf_counter()
         response = requests.post(
             f"{self.settings.base_url}/api/embed",
-            json={"model": model, "input": texts, "keep_alive": "10m"},
+            json={"model": model, "input": texts, "keep_alive": self.settings.keep_alive},
             timeout=OLLAMA_TIMEOUT_SECONDS,
         )
         response.raise_for_status()

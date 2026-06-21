@@ -6,10 +6,10 @@ This demo runs without training and without mock data. The default app uses real
 
 Recommended rental:
 
-- CPU: 4 vCPU or better
-- RAM: 16 GB comfortable, 8 GB minimum
-- Disk: 30 GB SSD
-- GPU: NVIDIA RTX A5000 24 GB, L4 24 GB, A10G 24 GB, or RTX 4090 24 GB
+- CPU: 6-8 vCPU recommended, 4 vCPU minimum
+- RAM: 32 GB recommended, 16 GB minimum
+- Disk: 80 GB SSD recommended, 40 GB minimum
+- GPU: NVIDIA RTX 3090 24 GB, RTX A5000 24 GB, L4 24 GB, A10G 24 GB, or RTX 4090 24 GB
 - OS: Ubuntu 22.04 LTS
 - Python: 3.11
 
@@ -35,11 +35,23 @@ If you want faster local inference or larger models:
 - Disk: 80 GB SSD
 - CUDA image: Ubuntu 22.04 + CUDA 12.x
 
-Default RTX A5000 24 GB models:
+Default RTX 3090 / 24 GB models:
 
 - Schema linking: `bge-m3`
 - Text-to-SQL: `qwen2.5-coder:14b`
 - Answer synthesis/verifier: `qwen2.5:7b`
+
+Stable 24 GB Ollama preset:
+
+- `TABLEQA_NUM_CTX=4096`
+- `TABLEQA_NUM_PREDICT=384`
+- `TABLEQA_OLLAMA_KEEP_ALIVE=3m`
+- `OLLAMA_NUM_PARALLEL=1`
+- `OLLAMA_MAX_LOADED_MODELS=1`
+- `OLLAMA_KV_CACHE_TYPE=q8_0`
+- `OLLAMA_FLASH_ATTENTION=1`
+
+This preset prioritises demo stability over maximum throughput. It avoids loading multiple large models at once and keeps context large enough for schema prompts without pushing RTX 3090 VRAM too hard.
 
 Optional larger model swaps:
 

@@ -228,6 +228,7 @@ textarea:focus {
 
 .topbar,
 .question-band,
+.pipeline-inspector,
 .answer-panel,
 .trace-panel,
 .table-section {
@@ -284,6 +285,7 @@ textarea:focus {
 }
 
 .answer-panel,
+.pipeline-inspector,
 .trace-panel,
 .table-section {
   padding: 16px;
@@ -333,6 +335,178 @@ textarea:focus {
   border-color: #fed7aa;
   color: var(--rose);
   background: #fff7ed;
+}
+
+.panel-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stage-pill {
+  min-width: 104px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  text-align: center;
+  color: var(--muted);
+  background: #eef2f7;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stage-pill.running {
+  color: var(--accent-strong);
+  background: #eef9fb;
+  border-color: #8ec5d6;
+}
+
+.stage-pill.done {
+  color: #166534;
+  background: #ecfdf3;
+  border-color: #a7f3d0;
+}
+
+.stage-pill.error {
+  color: var(--rose);
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.inspector-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: 16px;
+}
+
+.sequence-panel,
+.sql-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.mini-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mini-head strong {
+  color: var(--ink);
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pipeline-step {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pipeline-step.done {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.pipeline-step.running {
+  border-color: #8ec5d6;
+  background: #eef9fb;
+  box-shadow: inset 0 0 0 1px rgba(23, 107, 135, 0.12);
+}
+
+.pipeline-step.error {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.step-index {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.pipeline-step.done .step-index {
+  background: #16a34a;
+  color: #fff;
+}
+
+.pipeline-step.running .step-index {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pipeline-step.error .step-index {
+  background: var(--rose);
+  color: #fff;
+}
+
+.step-label {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.step-message {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.step-time {
+  margin-top: 7px;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.sql-live {
+  min-height: 116px;
+  max-height: 210px;
+  overflow: auto;
+  font-size: 13px;
+}
+
+.sql-meta {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sql-meta code,
+.sql-card p code {
+  background: #e2e8f0;
+  border-radius: 5px;
+  padding: 2px 5px;
+  color: var(--ink);
 }
 
 .confidence {
@@ -468,6 +642,36 @@ tr.highlight td {
   line-height: 1.35;
 }
 
+.sql-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.sql-card {
+  display: grid;
+  gap: 8px;
+}
+
+.sql-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.sql-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sql-card.compact pre {
+  min-height: 0;
+  max-height: 160px;
+}
+
 @media (max-width: 980px) {
   body {
     grid-template-columns: 1fr;
@@ -482,6 +686,14 @@ tr.highlight td {
 
   .answer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .inspector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .topbar {
@@ -507,5 +719,13 @@ tr.highlight td {
   .kv-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-step {
+    min-height: 92px;
   }
 }

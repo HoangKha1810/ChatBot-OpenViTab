@@ -39,14 +39,27 @@ On Vast.ai or another Ubuntu GPU container, use this one command after cloning a
 python3 scripts/run_gpu_demo.py
 ```
 
-It prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, prints `ollama ps`, then starts Uvicorn with:
+The launcher applies an RTX 3090 24GB stable preset, prints each startup step, checks `nvidia-smi`, starts `ollama serve` if needed, pulls missing models, warms up embedding/chat calls, prints `ollama ps`, then starts Uvicorn with:
 
 ```text
 TABLEQA_REQUIRE_GPU=1
 TABLEQA_STARTUP_CHECKS=1
+TABLEQA_NUM_CTX=4096
+TABLEQA_NUM_PREDICT=384
+OLLAMA_NUM_PARALLEL=1
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_KV_CACHE_TYPE=q8_0
 ```
 
-During a browser run, the Uvicorn terminal prints `[TableQA]` stage logs and the UI shows a live Progress tab.
+During a browser run, the Uvicorn terminal prints `[TableQA]` stage logs and the UI shows a live Pipeline Inspector with the generated SQL, execution order, evidence rows, and verifier status.
+
+For manual `uvicorn` runs on a 24GB GPU, copy the example environment first:
+
+```bash
+cp .env.example .env
+set -a; source .env; set +a
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
 ## Run Tests
 
@@ -104,9 +117,9 @@ Default task models:
 | Task | Model | Why |
 | --- | --- | --- |
 | Schema linking | `bge-m3` | Multilingual embedding model, good for Vietnamese headers and aliases. |
-| Text-to-SQL | `qwen2.5-coder:14b` | Stronger code/SQL model for RTX A5000 24GB demos. |
-| Answer synthesis | `qwen2.5:7b` | Better multilingual instruction model for Vietnamese answers. |
-| Evidence verifier | `qwen2.5:7b` | Advisory model verifier, guarded by deterministic evidence checks. |
+| Text-to-SQL | `qwen2.5-coder:14b` | Strong enough for SQL while still stable on RTX 3090/A5000 24GB with `num_ctx=4096`. |
+| Answer synthesis | `qwen2.5:7b` | Vietnamese answer quality without forcing another 14B model into 24GB VRAM. |
+| Evidence verifier | `qwen2.5:7b` | Advisory verifier, guarded by deterministic evidence checks. |
 
 Install on macOS:
 

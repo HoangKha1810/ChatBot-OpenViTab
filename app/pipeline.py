@@ -37,6 +37,8 @@ def answer_question(
 
     add_progress(progress_id, "planner", "Building deterministic SQL candidate.")
     planned = plan_sql(table, question)
+    add_progress(progress_id, "planner", f"Plan: {planned.plan.intent}/{planned.plan.operation}. {planned.plan.explanation}")
+    add_progress(progress_id, "planner", f"Candidate SQL: {planned.trace.sql} | params={planned.trace.params}")
     if runtime.settings.enabled:
         add_progress(progress_id, "schema_linking", f"Embedding question and schema with {runtime.settings.schema_embed_model}.")
         schema_rank, trace = link_schema_with_model(runtime, table, question, request_id=progress_id)
@@ -46,12 +48,18 @@ def answer_question(
         planned, trace = generate_sql_with_model(runtime, table, question, planned, schema_rank, request_id=progress_id)
         model_trace.append(trace)
         add_progress(progress_id, "text_to_sql", f"{trace.status}: {trace.note}")
+        add_progress(progress_id, "text_to_sql", f"Final SQL: {planned.trace.sql} | params={planned.trace.params}")
+        if planned.trace.repair_notes:
+            add_progress(progress_id, "text_to_sql", "Repair notes: " + " | ".join(planned.trace.repair_notes))
 
     sql_ok = True
     try:
         add_progress(progress_id, "execute_sql", f"Executing SQL: {planned.trace.sql}")
         evidence = execute_sql(table, planned.trace.sql, planned.trace.params)
         add_progress(progress_id, "execute_sql", f"SQL returned {len(evidence)} evidence row(s).")
+        if evidence:
+            indexes = ", ".join(str(row.row_index) for row in evidence[:8])
+            add_progress(progress_id, "execute_sql", f"Evidence row indexes: {indexes}.")
     except Exception as exc:
         sql_ok = False
         add_progress(progress_id, "execute_sql", f"SQL failed: {exc}. Falling back to table preview.")
@@ -59,6 +67,7 @@ def answer_question(
         planned.trace.repair_notes.append(f"SQL lỗi: {exc}. Fallback sang preview bảng.")
         planned.trace.sql = "SELECT row_index, * FROM rows LIMIT 8"
         planned.trace.params = []
+        add_progress(progress_id, "execute_sql", f"Fallback SQL: {planned.trace.sql} | params={planned.trace.params}")
         evidence = execute_sql(table, planned.trace.sql, planned.trace.params)
         add_progress(progress_id, "execute_sql", f"Fallback SQL returned {len(evidence)} row(s).")
 
@@ -70,6 +79,7 @@ def answer_question(
     else:
         add_progress(progress_id, "answer", "Using deterministic extractive answer mode.")
         answer = synthesize_answer(table, question, planned.plan, evidence)
+    add_progress(progress_id, "answer", f"Answer candidate: {answer}")
 
     add_progress(progress_id, "verifier", "Running deterministic evidence verifier.")
     deterministic_verifier = verify_answer(answer, planned.plan, evidence)
@@ -89,6 +99,7 @@ def answer_question(
         add_progress(progress_id, "verifier", f"Deterministic evidence verifier passed={verifier.passed}.")
     else:
         verifier = deterministic_verifier
+    add_progress(progress_id, "verifier", f"Verifier passed={verifier.passed}; checks={len(verifier.checks)}.")
 
     score, label, factors = score_confidence(sql_ok, evidence, verifier.passed, planned.trace.repaired)
     add_progress(progress_id, "confidence", f"Confidence {label} = {score}.")

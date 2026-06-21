@@ -18,9 +18,28 @@ from app.config import ANSWER_MODEL, SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, VERI
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 MODELS = list(dict.fromkeys([SCHEMA_EMBED_MODEL, TEXT_TO_SQL_MODEL, ANSWER_MODEL, VERIFIER_MODEL]))
 
+RTX_3090_DEFAULT_ENV = {
+    "TABLEQA_REQUIRE_GPU": "1",
+    "TABLEQA_REQUIRE_MODELS": "1",
+    "TABLEQA_USE_MODELS": "1",
+    "TABLEQA_STARTUP_CHECKS": "1",
+    "TABLEQA_NUM_CTX": "4096",
+    "TABLEQA_NUM_PREDICT": "384",
+    "TABLEQA_TOP_P": "0.75",
+    "TABLEQA_TEMPERATURE": "0",
+    "TABLEQA_OLLAMA_KEEP_ALIVE": "3m",
+    "OLLAMA_TIMEOUT_SECONDS": "300",
+    "OLLAMA_NUM_PARALLEL": "1",
+    "OLLAMA_MAX_LOADED_MODELS": "1",
+    "OLLAMA_KEEP_ALIVE": "3m",
+    "OLLAMA_KV_CACHE_TYPE": "q8_0",
+    "OLLAMA_FLASH_ATTENTION": "1",
+}
+
 
 def main() -> int:
     print("[TableQA] GPU demo launcher")
+    apply_rtx_3090_defaults()
     ensure_command("git")
     ensure_command("python3")
     ensure_command("ollama")
@@ -31,11 +50,6 @@ def main() -> int:
     print_ollama_ps()
     print("[TableQA] Starting FastAPI on http://0.0.0.0:8000")
     env = os.environ.copy()
-    env["TABLEQA_REQUIRE_GPU"] = "1"
-    env["TABLEQA_STARTUP_CHECKS"] = "1"
-    env.setdefault("OLLAMA_NUM_PARALLEL", "1")
-    env.setdefault("OLLAMA_KEEP_ALIVE", "10m")
-    env.setdefault("OLLAMA_KV_CACHE_TYPE", "q8_0")
     return subprocess.call(
         [
             sys.executable,
@@ -52,6 +66,14 @@ def main() -> int:
         cwd=ROOT,
         env=env,
     )
+
+
+def apply_rtx_3090_defaults() -> None:
+    print("[TableQA] Applying RTX 3090 24GB stable inference defaults:")
+    for key, value in RTX_3090_DEFAULT_ENV.items():
+        os.environ.setdefault(key, value)
+        print(f"[TableQA]   {key}={os.environ[key]}")
+    print("[TableQA] Override any value by exporting it before running this script.")
 
 
 def ensure_command(command: str) -> None:
@@ -84,9 +106,6 @@ def ensure_ollama_server() -> None:
     log_path = ROOT / "data" / "processed" / "ollama.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
-    env.setdefault("OLLAMA_NUM_PARALLEL", "1")
-    env.setdefault("OLLAMA_KEEP_ALIVE", "10m")
-    env.setdefault("OLLAMA_KV_CACHE_TYPE", "q8_0")
     with log_path.open("ab") as log_file:
         subprocess.Popen(["ollama", "serve"], stdout=log_file, stderr=subprocess.STDOUT, cwd=ROOT, env=env)
     for _ in range(30):
@@ -132,7 +151,11 @@ def warmup_ollama() -> None:
     print(f"[TableQA] Warming up embedding model {SCHEMA_EMBED_MODEL}...")
     response = requests.post(
         f"{OLLAMA_BASE_URL}/api/embed",
-        json={"model": SCHEMA_EMBED_MODEL, "input": ["kiểm tra GPU cho Vietnamese TableQA"], "keep_alive": "10m"},
+        json={
+            "model": SCHEMA_EMBED_MODEL,
+            "input": ["kiểm tra GPU cho Vietnamese TableQA"],
+            "keep_alive": os.environ["TABLEQA_OLLAMA_KEEP_ALIVE"],
+        },
         timeout=240,
     )
     response.raise_for_status()
@@ -150,8 +173,14 @@ def warmup_ollama() -> None:
                 ],
                 "stream": False,
                 "format": "json",
-                "keep_alive": "10m",
-                "options": {"temperature": 0, "seed": 42, "num_predict": 64},
+                "keep_alive": os.environ["TABLEQA_OLLAMA_KEEP_ALIVE"],
+                "options": {
+                    "temperature": float(os.environ["TABLEQA_TEMPERATURE"]),
+                    "top_p": float(os.environ["TABLEQA_TOP_P"]),
+                    "num_ctx": int(os.environ["TABLEQA_NUM_CTX"]),
+                    "num_predict": 64,
+                    "seed": 42,
+                },
             },
             timeout=240,
         )

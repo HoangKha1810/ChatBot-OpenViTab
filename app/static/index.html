@@ -70,6 +70,33 @@
         </div>
       </section>
 
+      <section class="pipeline-inspector">
+        <div class="panel-head">
+          <div>
+            <h3>Pipeline Inspector</h3>
+            <p class="panel-subtitle">Theo dõi realtime SQL được sinh ra và trình tự các agent chạy.</p>
+          </div>
+          <span class="stage-pill" id="pipeline-stage-pill">Chưa chạy</span>
+        </div>
+        <div class="inspector-grid">
+          <div class="sequence-panel">
+            <div class="mini-head">
+              <span>Trình tự chạy</span>
+              <strong id="step-count">0/8</strong>
+            </div>
+            <div class="stepper" id="pipeline-steps"></div>
+          </div>
+          <div class="sql-panel">
+            <div class="mini-head">
+              <span>SQL đang dùng</span>
+              <strong id="sql-source">Chưa có SQL</strong>
+            </div>
+            <pre class="sql-live" id="live-sql">Chưa chạy pipeline.</pre>
+            <div class="sql-meta" id="live-sql-meta">SQL sẽ xuất hiện sau bước Planner/Text-to-SQL.</div>
+          </div>
+        </div>
+      </section>
+
       <section class="answer-grid">
         <div class="answer-panel">
           <div class="panel-head">

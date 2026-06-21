@@ -26,4 +26,12 @@ SCHEMA_EMBED_MODEL = os.getenv("TABLEQA_SCHEMA_EMBED_MODEL", "bge-m3")
 TEXT_TO_SQL_MODEL = os.getenv("TABLEQA_TEXT_TO_SQL_MODEL", "qwen2.5-coder:14b")
 ANSWER_MODEL = os.getenv("TABLEQA_ANSWER_MODEL", "qwen2.5:7b")
 VERIFIER_MODEL = os.getenv("TABLEQA_VERIFIER_MODEL", "qwen2.5:7b")
-OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "180"))
+
+# RTX 3090 24 GB stable inference preset. These can be overridden from .env
+# or shell variables when running on larger GPUs.
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+OLLAMA_KEEP_ALIVE = os.getenv("TABLEQA_OLLAMA_KEEP_ALIVE", os.getenv("OLLAMA_KEEP_ALIVE", "3m"))
+OLLAMA_NUM_CTX = int(os.getenv("TABLEQA_NUM_CTX", "4096"))
+OLLAMA_NUM_PREDICT = int(os.getenv("TABLEQA_NUM_PREDICT", "384"))
+OLLAMA_TOP_P = float(os.getenv("TABLEQA_TOP_P", "0.75"))
+OLLAMA_TEMPERATURE = float(os.getenv("TABLEQA_TEMPERATURE", "0"))
