@@ -88,7 +88,7 @@ def _dedupe_headers(headers: list[str]) -> list[str]:
     seen: dict[str, int] = {}
     output: list[str] = []
     for index, header in enumerate(headers):
-        base = normalize_text(header) or f"Cột {index + 1}"
+        base = normalize_text(header) or f"Column {index + 1}"
         count = seen.get(base, 0) + 1
         seen[base] = count
         output.append(base if count == 1 else f"{base} ({count})")
@@ -125,7 +125,7 @@ def _extract_headers_and_rows(table_rows: list[list[str]], table_type: list[str]
                 parts.append(value)
         base_is_caption = base_counts.get(normalize_key(base), 0) >= max(2, len(headers) // 2)
         cleaned_parts = _drop_redundant_header_parts(parts, base_is_caption=base_is_caption)
-        merged.append(" / ".join(cleaned_parts) if cleaned_parts else f"Cột {index + 1}")
+        merged.append(" / ".join(cleaned_parts) if cleaned_parts else f"Column {index + 1}")
     return _dedupe_headers(merged), data_rows
 
 

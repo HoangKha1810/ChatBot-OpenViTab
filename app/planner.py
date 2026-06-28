@@ -56,7 +56,7 @@ def _plan_lookup(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
             filter_column=numeric_column.header,
             filter_value=_format_filter_number(numeric_value),
             numeric_value=numeric_value,
-            explanation=f"Tìm dòng có '{numeric_column.header}' bằng {numeric_value:g} rồi lấy cột '{answer_column.header}'.",
+            explanation=f"Find rows where '{numeric_column.header}' equals {numeric_value:g}, then project '{answer_column.header}'.",
         )
         return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=[numeric_value]))
 
@@ -66,7 +66,7 @@ def _plan_lookup(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
             intent="lookup",
             operation="table_preview",
             answer_column=answer_column.header,
-            explanation="Không tìm được điều kiện lọc chắc chắn, trả về các dòng đầu để tổng hợp có kiểm chứng.",
+            explanation="No reliable filter was detected, so the planner returns a small table preview for evidence-checked synthesis.",
         )
         return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql))
 
@@ -78,7 +78,7 @@ def _plan_lookup(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         answer_column=answer_column.header,
         filter_column=filter_column.header,
         filter_value=filter_value,
-        explanation=f"Tìm dòng chứa '{filter_value}' rồi lấy cột '{answer_column.header}'.",
+        explanation=f"Find rows containing '{filter_value}', then project '{answer_column.header}'.",
     )
     return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=params))
 
@@ -99,7 +99,7 @@ def _plan_count(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
     if filter_column is not None and filter_value is not None:
         where.append(f"{filter_column.sql_name}_key LIKE ?")
         params.append(f"%{normalize_key(filter_value)}%")
-        explanation_bits.append(f"{filter_column.header} chứa '{filter_value}'")
+        explanation_bits.append(f"{filter_column.header} contains '{filter_value}'")
 
     sql = "SELECT row_index, * FROM rows"
     if where:
@@ -112,7 +112,7 @@ def _plan_count(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         filter_column=filter_column.header if filter_column else target_column.header if numeric_value is not None else None,
         filter_value=filter_value,
         numeric_value=numeric_value,
-        explanation="Đếm các dòng thỏa điều kiện: " + (", ".join(explanation_bits) if explanation_bits else "toàn bộ bảng."),
+        explanation="Count rows matching: " + (", ".join(explanation_bits) if explanation_bits else "the full table."),
     )
     return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=params))
 
@@ -133,7 +133,7 @@ def _plan_extreme(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         answer_column=answer_column.header,
         sort_column=sort_column.header,
         sort_direction="DESC" if is_max else "ASC",
-        explanation=f"Sắp xếp theo cột '{sort_column.header}' để lấy giá trị {'lớn nhất' if is_max else 'nhỏ nhất'}.",
+        explanation=f"Sort by '{sort_column.header}' to retrieve the {'largest' if is_max else 'smallest'} value.",
     )
     return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql))
 
@@ -153,10 +153,10 @@ def _plan_yes_no(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         plan = QueryPlan(
             intent="yes_no",
             operation="compound_numeric_check",
-            answer_column="Có/Không",
+            answer_column="Yes/No",
             filter_column=f"{year_column.header}; {target_column.header}",
             numeric_value=compare_value,
-            explanation=f"Kiểm tra dòng năm {year_value:g} có '{target_column.header}' {op} {compare_value:g}.",
+            explanation=f"Check whether the row for year {year_value:g} has '{target_column.header}' {op} {compare_value:g}.",
         )
         return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=[year_value, compare_value]))
 
@@ -169,10 +169,10 @@ def _plan_yes_no(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
             plan = QueryPlan(
                 intent="yes_no",
                 operation="header_threshold_count_check",
-                answer_column="Có/Không",
+                answer_column="Yes/No",
                 filter_column=threshold_col.header,
                 numeric_value=count_value,
-                explanation=f"Cột '{threshold_col.header}' đã mã hóa ngưỡng {threshold:g}; kiểm tra giá trị bằng {count_value:g}.",
+                explanation=f"Column '{threshold_col.header}' encodes threshold {threshold:g}; check whether its value equals {count_value:g}.",
             )
             return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=[count_value]))
 
@@ -184,10 +184,10 @@ def _plan_yes_no(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         plan = QueryPlan(
             intent="yes_no",
             operation="existence_numeric",
-            answer_column="Có/Không",
+            answer_column="Yes/No",
             filter_column=target_column.header,
             numeric_value=numeric_value,
-            explanation=f"Kiểm tra có dòng nào có '{target_column.header}' {op} {numeric_value:g}.",
+            explanation=f"Check whether any row has '{target_column.header}' {op} {numeric_value:g}.",
         )
         return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=[numeric_value]))
 
@@ -197,10 +197,10 @@ def _plan_yes_no(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
         plan = QueryPlan(
             intent="yes_no",
             operation="existence_text",
-            answer_column="Có/Không",
+            answer_column="Yes/No",
             filter_column=filter_column.header,
             filter_value=filter_value,
-            explanation=f"Kiểm tra bảng có bằng chứng chứa '{filter_value}' ở cột '{filter_column.header}'.",
+            explanation=f"Check whether the table has evidence containing '{filter_value}' in '{filter_column.header}'.",
         )
         return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql, params=[f"%{normalize_key(filter_value)}%"]))
 
@@ -208,8 +208,8 @@ def _plan_yes_no(table: TableInfo, question: str, q_key: str) -> PlannedSQL:
     plan = QueryPlan(
         intent="yes_no",
         operation="weak_existence",
-        answer_column="Có/Không",
-        explanation="Không tách được điều kiện yes/no rõ ràng, dùng preview bảng để trả lời thận trọng.",
+        answer_column="Yes/No",
+        explanation="No clear yes/no condition was detected, so the planner uses a table preview and answers conservatively.",
     )
     return PlannedSQL(plan=plan, trace=SQLTrace(sql=sql))
 

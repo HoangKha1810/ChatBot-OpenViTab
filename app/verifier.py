@@ -10,38 +10,38 @@ def verify_answer(answer: str, plan: QueryPlan, evidence: list[EvidenceRow]) -> 
 
     if plan.intent in {"lookup", "superlative"}:
         if evidence:
-            checks.append("Có evidence row trả về từ SQLite.")
+            checks.append("SQLite returned evidence rows.")
         else:
-            reasons.append("Không có dòng evidence để chứng minh câu trả lời.")
+            reasons.append("No evidence rows are available to support the answer.")
 
         answer_key = normalize_key(answer)
         if answer_key and any(answer_key in normalize_key(value) for row in evidence for value in row.values.values()):
-            checks.append("Chuỗi trả lời xuất hiện trong evidence.")
+            checks.append("The answer string appears in the evidence.")
         elif answer.startswith("Không tìm thấy"):
-            reasons.append("Pipeline không tìm được câu trả lời có bằng chứng.")
+            reasons.append("The pipeline could not find an evidence-backed answer.")
         else:
-            reasons.append("Chuỗi trả lời chưa khớp trực tiếp với evidence.")
+            reasons.append("The answer string does not directly match the evidence.")
 
     elif plan.intent == "count":
-        checks.append("Câu trả lời được tính bằng số dòng evidence sau khi execute SQL.")
+        checks.append("The answer is computed from the number of evidence rows returned by SQL.")
         if answer.isdigit():
-            checks.append("Định dạng count hợp lệ.")
+            checks.append("Count format is valid.")
         else:
-            reasons.append("Count không phải số nguyên.")
+            reasons.append("Count is not an integer.")
 
     elif plan.intent == "yes_no":
-        checks.append("Câu trả lời yes/no được suy ra từ sự tồn tại của evidence.")
+        checks.append("The yes/no answer is inferred from the presence of evidence.")
         if normalize_key(answer) in {"co", "khong"}:
-            checks.append("Định dạng yes/no hợp lệ.")
+            checks.append("Vietnamese yes/no format is valid.")
         else:
-            reasons.append("Câu trả lời yes/no không hợp lệ.")
+            reasons.append("The yes/no answer is invalid.")
 
     if plan.filter_value and evidence:
         needle = normalize_key(plan.filter_value)
         if any(needle in normalize_key(value) for row in evidence for value in row.values.values()):
-            checks.append("Điều kiện lọc xuất hiện trong evidence.")
+            checks.append("The planned filter value appears in the evidence.")
         else:
-            reasons.append("Evidence không chứa giá trị lọc đã lập kế hoạch.")
+            reasons.append("The evidence does not contain the planned filter value.")
 
     return VerificationResult(passed=not reasons, checks=checks, unsupported_reasons=reasons)
 
@@ -55,9 +55,9 @@ def score_confidence(sql_ok: bool, evidence: list[EvidenceRow], verifier_passed:
     }
     score = 0.28 * factors["sql_executable"] + 0.27 * factors["evidence_non_empty"] + 0.35 * factors["verifier_passed"] + 0.10 * factors["no_repair_needed"]
     if score >= 0.82:
-        label = "Cao"
+        label = "High"
     elif score >= 0.55:
-        label = "Trung bình"
+        label = "Medium"
     else:
-        label = "Thấp"
+        label = "Low"
     return round(score, 3), label, factors

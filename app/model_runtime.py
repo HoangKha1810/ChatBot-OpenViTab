@@ -119,7 +119,7 @@ class OllamaRuntime:
     def ensure_ready(self, request_id: str = "startup") -> None:
         if not self.settings.enabled:
             if self.settings.required:
-                raise ModelUnavailableError("TABLEQA_USE_MODELS=0 nhưng TABLEQA_REQUIRE_MODELS=1.")
+                raise ModelUnavailableError("TABLEQA_USE_MODELS=0 but TABLEQA_REQUIRE_MODELS=1.")
             add_progress(request_id, "models", "Model runtime disabled by TABLEQA_USE_MODELS=0.")
             return
 
@@ -133,8 +133,8 @@ class OllamaRuntime:
         missing = ", ".join(status.get("missing") or [])
         base = self.settings.base_url
         message = (
-            "Model thật chưa sẵn sàng. Cần Ollama đang chạy tại "
-            f"{base} và các model: {missing}. Chạy `python scripts/setup_ollama_models.py`."
+            "Real model runtime is not ready. Ollama must be running at "
+            f"{base} with these models installed: {missing}. Run `python scripts/setup_ollama_models.py`."
         )
         if self.settings.required:
             add_progress(request_id, "models", f"Not ready: {message}")
@@ -145,7 +145,7 @@ class OllamaRuntime:
             add_progress(request_id, "gpu", "TABLEQA_REQUIRE_GPU=0, skipping hard GPU requirement.")
             return
         if shutil.which("nvidia-smi") is None:
-            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng không tìm thấy `nvidia-smi`.")
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 but `nvidia-smi` was not found.")
         try:
             output = subprocess.check_output(
                 [
@@ -157,9 +157,9 @@ class OllamaRuntime:
                 timeout=10,
             ).strip()
         except Exception as exc:
-            raise ModelUnavailableError(f"Không kiểm tra được NVIDIA GPU: {exc}") from exc
+            raise ModelUnavailableError(f"Could not check the NVIDIA GPU: {exc}") from exc
         if not output:
-            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng `nvidia-smi` không trả GPU nào.")
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 but `nvidia-smi` returned no GPU.")
         add_progress(request_id, "gpu", f"NVIDIA GPU detected: {output.splitlines()[0]}.")
 
     def warmup(self, request_id: str = "startup") -> None:
@@ -168,7 +168,7 @@ class OllamaRuntime:
             return
 
         add_progress(request_id, "warmup", f"Warming up embedding model {self.settings.schema_embed_model}.")
-        self.embed(self.settings.schema_embed_model, ["kiểm tra GPU cho Vietnamese TableQA"], request_id=request_id)
+        self.embed(self.settings.schema_embed_model, ["GPU check for Vietnamese TableQA"], request_id=request_id)
 
         for model in dict.fromkeys(
             [
@@ -206,14 +206,14 @@ class OllamaRuntime:
         if not TABLEQA_REQUIRE_GPU:
             return
         if shutil.which("ollama") is None:
-            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 nhưng không tìm thấy lệnh `ollama`.")
+            raise ModelUnavailableError("TABLEQA_REQUIRE_GPU=1 but the `ollama` command was not found.")
         try:
             output = subprocess.check_output(["ollama", "ps"], text=True, timeout=10).strip()
         except Exception as exc:
-            raise ModelUnavailableError(f"Không chạy được `ollama ps` để kiểm tra GPU: {exc}") from exc
+            raise ModelUnavailableError(f"Could not run `ollama ps` to check GPU loading: {exc}") from exc
         add_progress(request_id, "gpu", f"ollama ps: {output or 'no loaded models'}")
         if "gpu" not in output.lower():
-            raise ModelUnavailableError("Ollama đã chạy model nhưng `ollama ps` không báo GPU. Kiểm tra CUDA/NVIDIA runtime.")
+            raise ModelUnavailableError("Ollama loaded a model, but `ollama ps` does not report GPU usage. Check the CUDA/NVIDIA runtime.")
 
     def list_models(self) -> list[str]:
         response = requests.get(f"{self.settings.base_url}/api/tags", timeout=5)
@@ -295,7 +295,7 @@ class OllamaRuntime:
         payload = response.json()
         embeddings = payload.get("embeddings")
         if not isinstance(embeddings, list):
-            raise ModelUnavailableError(f"Ollama embed response không hợp lệ cho model {model}.")
+            raise ModelUnavailableError(f"Ollama returned an invalid embed response for model {model}.")
         return embeddings
 
     def _post_ollama_json(
@@ -343,7 +343,7 @@ def _parse_json_object(content: str) -> dict[str, Any]:
         text = text[start : end + 1]
     data = json.loads(text)
     if not isinstance(data, dict):
-        raise ValueError("Model không trả về JSON object.")
+        raise ValueError("Model did not return a JSON object.")
     return data
 
 

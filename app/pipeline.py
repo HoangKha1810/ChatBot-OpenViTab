@@ -64,7 +64,7 @@ def answer_question(
         sql_ok = False
         add_progress(progress_id, "execute_sql", f"SQL failed: {exc}. Falling back to table preview.")
         planned.trace.repaired = True
-        planned.trace.repair_notes.append(f"SQL lỗi: {exc}. Fallback sang preview bảng.")
+        planned.trace.repair_notes.append(f"SQL failed: {exc}. Fell back to a table preview.")
         planned.trace.sql = "SELECT row_index, * FROM rows LIMIT 8"
         planned.trace.params = []
         add_progress(progress_id, "execute_sql", f"Fallback SQL: {planned.trace.sql} | params={planned.trace.params}")

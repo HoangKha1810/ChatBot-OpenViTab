@@ -30,7 +30,7 @@ _PROGRESS: dict[str, ProgressRecord] = {}
 _MAX_RECORDS = 200
 
 
-def start_progress(request_id: str, message: str = "Bắt đầu pipeline.") -> None:
+def start_progress(request_id: str, message: str = "Starting pipeline.") -> None:
     with _LOCK:
         _PROGRESS[request_id] = ProgressRecord(request_id=request_id)
         _trim_locked()
@@ -52,7 +52,7 @@ def add_progress(request_id: str, stage: str, message: str) -> None:
     log_step(request_id, stage, message)
 
 
-def finish_progress(request_id: str, message: str = "Pipeline hoàn tất.") -> None:
+def finish_progress(request_id: str, message: str = "Pipeline complete.") -> None:
     add_progress(request_id, "done", message)
     with _LOCK:
         if request_id in _PROGRESS:

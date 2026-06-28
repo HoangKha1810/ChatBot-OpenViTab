@@ -32,7 +32,7 @@ def link_schema_with_model(
             if len(samples) >= 3:
                 break
         aliases = ", ".join(col.aliases)
-        column_texts.append(f"Cột {col.sql_name}: {col.header}. Alias: {aliases}. Ví dụ: {' | '.join(samples)}")
+        column_texts.append(f"Column {col.sql_name}: {col.header}. Aliases: {aliases}. Examples: {' | '.join(samples)}")
 
     embeddings, latency = runtime.embed(settings.schema_embed_model, [question] + column_texts, request_id=request_id)
     q_vec = embeddings[0]
@@ -80,23 +80,23 @@ def generate_sql_with_model(
         "sort_direction": candidate.plan.sort_direction,
     }
     system = (
-        "Bạn là text-to-SQL agent cho SQLite. Chỉ trả JSON hợp lệ. "
-        "Không giải thích ngoài JSON. Chỉ dùng bảng `rows`, cột row_index và các cột c0, c1... "
-        "Dùng cN_key cho LIKE, cN_num cho so sánh số. Không dùng INSERT/UPDATE/DELETE/DROP."
+        "You are a SQLite text-to-SQL agent for Vietnamese table questions. Return valid JSON only. "
+        "Do not explain outside JSON. Use only table `rows`, row_index, and c0, c1... columns. "
+        "Use cN_key for LIKE and cN_num for numeric comparisons. Do not use INSERT/UPDATE/DELETE/DROP."
     )
     user = json.dumps(
         {
-            "task": "Sửa hoặc xác nhận SQL cho câu hỏi tiếng Việt.",
+            "task": "Repair or confirm the SQL for the Vietnamese question.",
             "question": question,
             "table_title": table.table_title,
             "schema": schema,
             "schema_embedding_top": schema_rank[:6],
             "candidate": candidate_payload,
             "rules": [
-                "Nếu candidate_sql đã đúng, giữ nguyên.",
-                "SQL phải bắt đầu bằng SELECT và trả về row_index, * FROM rows.",
-                "params phải là array; nếu SQL tự chứa literal thì params rỗng.",
-                "Không được invent cột ngoài schema.",
+                "If candidate_sql is already correct, keep it unchanged.",
+                "SQL must start with SELECT and return row_index, * FROM rows.",
+                "params must be an array; if SQL contains literals directly, params must be empty.",
+                "Do not invent columns outside the schema.",
             ],
             "return_json": {
                 "sql": "SELECT row_index, * FROM rows ...",
@@ -108,7 +108,7 @@ def generate_sql_with_model(
                 "filter_value": candidate.plan.filter_value,
                 "sort_column": candidate.plan.sort_column,
                 "sort_direction": candidate.plan.sort_direction,
-                "explanation": "ngắn gọn bằng tiếng Việt",
+                "explanation": "brief English UI explanation",
             },
         },
         ensure_ascii=False,
@@ -145,17 +145,17 @@ def generate_sql_with_model(
                 selected = PlannedSQL(plan=plan, trace=trace)
             else:
                 status = "repaired"
-                note = "Model SQL chạy được nhưng rỗng; giữ candidate SQL đã có evidence."
+                note = "Model SQL executed but returned no rows; keeping the evidence-backed candidate SQL."
                 candidate.trace.repaired = True
                 candidate.trace.repair_notes.append(note)
         except Exception as exc:
             status = "repaired"
-            note = f"Model SQL không execute được ({exc}); giữ candidate SQL."
+            note = f"Model SQL could not execute ({exc}); keeping the candidate SQL."
             candidate.trace.repaired = True
             candidate.trace.repair_notes.append(note)
     else:
         status = "repaired"
-        note = "Model không trả SELECT an toàn; giữ candidate SQL."
+        note = "Model did not return a safe SELECT statement; keeping the candidate SQL."
         candidate.trace.repaired = True
         candidate.trace.repair_notes.append(note)
 
@@ -180,9 +180,11 @@ def synthesize_answer_with_model(
     settings = runtime.settings
     extractive = synthesize_answer(table, question, plan, evidence)
     system = (
-        "Bạn là answer synthesis agent cho Vietnamese TableQA. "
-        "Chỉ trả JSON. Câu trả lời phải ngắn, đúng theo evidence, không thêm thông tin ngoài bảng. "
-        "Nếu extractive_answer là giá trị ô đúng thì giữ nguyên giá trị đó."
+        "You are the answer synthesis agent for Vietnamese TableQA. Return valid JSON only. "
+        "The `answer` value must be concise, natural Vietnamese. Use only the supplied evidence; "
+        "do not add outside-table knowledge. Preserve exact cell values, names, units, and spelling. "
+        "For yes/no questions, answer exactly `Có` or `Không`. If extractive_answer is the correct "
+        "cell value, keep it unchanged. If the evidence is insufficient, return extractive_answer instead of guessing."
     )
     user = json.dumps(
         {
@@ -190,8 +192,8 @@ def synthesize_answer_with_model(
             "table_title": table.table_title,
             "plan": plan.model_dump(),
             "extractive_answer": extractive,
-            "evidence": [row.model_dump() for row in evidence[:8]],
-            "return_json": {"answer": extractive, "rationale": "một câu ngắn"},
+            "evidence": [row.model_dump() for row in evidence[:12]],
+            "return_json": {"answer": extractive, "rationale": "brief evidence reason"},
         },
         ensure_ascii=False,
     )
@@ -232,15 +234,16 @@ def verify_with_model(
 ) -> tuple[VerificationResult, ModelTrace]:
     settings = runtime.settings
     system = (
-        "Bạn là evidence verifier cho Vietnamese TableQA. Chỉ trả JSON. "
-        "Kiểm tra câu trả lời có được chứng minh trực tiếp bởi evidence không."
+        "You are the evidence verifier for Vietnamese TableQA. Return valid JSON only. "
+        "Check whether the Vietnamese answer is directly supported by the evidence. "
+        "Use English for checks and unsupported_reasons."
     )
     user = json.dumps(
         {
             "question": question,
             "answer": answer,
             "plan": plan.model_dump(),
-            "evidence": [row.model_dump() for row in evidence[:8]],
+            "evidence": [row.model_dump() for row in evidence[:12]],
             "deterministic_verifier": deterministic.model_dump(),
             "return_json": {
                 "passed": deterministic.passed,
@@ -262,9 +265,9 @@ def verify_with_model(
     checks = deterministic.checks + [f"Model verifier: {item}" for item in model_checks[:4]]
     reasons = list(deterministic.unsupported_reasons)
     if not model_passed and not deterministic.passed:
-        reasons.extend(model_reasons or ["Model verifier không xác nhận evidence support."])
+        reasons.extend(model_reasons or ["Model verifier did not confirm evidence support."])
     elif not model_passed:
-        checks.append("Model verifier không xác nhận, nhưng deterministic evidence verifier đã pass nên giữ kết quả evidence-safe.")
+        checks.append("Model verifier did not confirm support, but the deterministic evidence verifier passed, so the evidence-safe result is kept.")
 
     return VerificationResult(
         passed=deterministic.passed,

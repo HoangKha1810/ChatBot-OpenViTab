@@ -37,15 +37,15 @@ BASE_DEFAULT_ENV = {
 }
 
 RTX_3090_ENV = {
-    "TABLEQA_NUM_CTX": "4096",
-    "TABLEQA_NUM_PREDICT": "384",
+    "TABLEQA_NUM_CTX": "6144",
+    "TABLEQA_NUM_PREDICT": "512",
     "OLLAMA_KV_CACHE_TYPE": "q8_0",
     "OLLAMA_FLASH_ATTENTION": "1",
 }
 
 V100_ENV = {
-    "TABLEQA_NUM_CTX": "3072",
-    "TABLEQA_NUM_PREDICT": "256",
+    "TABLEQA_NUM_CTX": "4096",
+    "TABLEQA_NUM_PREDICT": "384",
     "OLLAMA_KV_CACHE_TYPE": "f16",
     "OLLAMA_FLASH_ATTENTION": "0",
 }
@@ -237,7 +237,7 @@ def warmup_ollama() -> None:
     if warmup_failed:
         os.environ["TABLEQA_STARTUP_CHECKS"] = "0"
         print("[TableQA] WARNING: one or more warm-ups failed.")
-        print("[TableQA] The web app will still start; model calls will retry when you press `Chạy pipeline`.")
+        print("[TableQA] The web app will still start; model calls will retry when you press `Run pipeline`.")
         print(f"[TableQA] If it still fails, inspect Ollama log: {OLLAMA_LOG_PATH}")
 
 
@@ -285,7 +285,7 @@ def warmup_embedding_model() -> tuple[str, bool]:
                 f"{OLLAMA_BASE_URL}/api/embed",
                 json={
                     "model": model,
-                    "input": ["kiểm tra GPU cho Vietnamese TableQA"],
+                    "input": ["GPU check for Vietnamese TableQA"],
                     "keep_alive": os.environ["TABLEQA_OLLAMA_KEEP_ALIVE"],
                 },
                 timeout=240,

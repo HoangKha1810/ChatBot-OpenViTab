@@ -12,44 +12,44 @@ const state = {
 
 const PIPELINE_STEPS = [
   {
-    label: "Nhận request & load bảng",
+    label: "Receive request & load table",
     stages: ["start", "load_table"],
-    idle: "Chờ gửi câu hỏi tới backend.",
+    idle: "Waiting for a question to be sent to the backend.",
   },
   {
-    label: "Kiểm tra GPU/Ollama",
+    label: "Check GPU/Ollama",
     stages: ["gpu", "models", "warmup"],
-    idle: "Kiểm tra runtime và model local.",
+    idle: "Checking the local runtime and models.",
   },
   {
-    label: "Planner tạo SQL ứng viên",
+    label: "Planner builds SQL candidate",
     stages: ["planner"],
-    idle: "Tách intent, cột trả lời, cột lọc/sắp xếp.",
+    idle: "Detecting intent, answer column, filters, and sorting.",
   },
   {
     label: "Schema linking",
     stages: ["schema_linking", "ollama_embed"],
-    idle: "Rank cột liên quan bằng embedding.",
+    idle: "Ranking relevant columns with embeddings.",
   },
   {
     label: "Text-to-SQL validate",
     stages: ["text_to_sql"],
-    idle: "Model kiểm tra/sửa SQL ứng viên.",
+    idle: "Model validates or repairs the SQL candidate.",
   },
   {
     label: "Execute SQL",
     stages: ["execute_sql"],
-    idle: "Chạy SQL trên SQLite để lấy evidence rows.",
+    idle: "Running SQL on SQLite to retrieve evidence rows.",
   },
   {
     label: "Answer synthesis",
     stages: ["answer"],
-    idle: "Sinh câu trả lời chỉ dựa trên evidence.",
+    idle: "Generating the answer from evidence only.",
   },
   {
     label: "Verifier & confidence",
     stages: ["verifier", "confidence", "done"],
-    idle: "Kiểm chứng evidence và tính confidence.",
+    idle: "Verifying evidence support and computing confidence.",
   },
 ];
 
@@ -133,7 +133,7 @@ async function loadHealth() {
     }
     const domains = health.dataset.domains || [];
     $("#domain").innerHTML =
-      '<option value="">Tất cả domain</option>' +
+      '<option value="">All domains</option>' +
       domains.map((domain) => `<option value="${escapeHtml(domain)}">${escapeHtml(domain)}</option>`).join("");
   } catch (error) {
     $("#dataset-status").textContent = "Error";
@@ -192,9 +192,9 @@ async function selectExample(item) {
   $("#qa-id").textContent = item.qa_id;
   $("#table-id").textContent = item.table_id;
   $("#domain-label").textContent = item.table_domain || "No domain";
-  $("#expected").textContent = item.expected_answer ? `Đáp án gốc: ${item.expected_answer}` : "";
-  $("#answer").textContent = "Sẵn sàng chạy trên bảng thật.";
-  $("#run-status").textContent = "Trạng thái: chờ chạy.";
+  $("#expected").textContent = item.expected_answer ? `Original answer: ${item.expected_answer}` : "";
+  $("#answer").textContent = "Ready to run on the real table.";
+  $("#run-status").textContent = "Status: idle.";
   $("#run-status").className = "run-status";
   $("#confidence-label").textContent = "-";
   $("#confidence-meter").value = 0;
@@ -242,9 +242,9 @@ async function runPipeline() {
   stopProgressPolling();
   setActiveTab("progress");
   $("#run").disabled = true;
-  $("#run").innerHTML = '<i data-lucide="loader-circle"></i> Đang chạy...';
-  $("#answer").textContent = "Đang chạy SQL planner, execute và verifier...";
-  $("#run-status").textContent = "Trạng thái: gửi request tới backend...";
+  $("#run").innerHTML = '<i data-lucide="loader-circle"></i> Running...';
+  $("#answer").textContent = "Running SQL planner, executor, and verifier...";
+  $("#run-status").textContent = "Status: sending request to backend...";
   $("#run-status").className = "run-status running";
   renderPipelineInspector();
   if (window.lucide) {
@@ -272,20 +272,20 @@ async function runPipeline() {
   } catch (error) {
     const recovered = await recoverResult(requestId);
     if (recovered) {
-      $("#run-status").textContent = "Đã khôi phục kết quả sau lỗi kết nối tạm thời.";
+      $("#run-status").textContent = "Recovered result after a temporary connection error.";
       $("#run-status").className = "run-status";
       renderTrace();
       renderTable();
     } else {
       const message = describeError(error);
       $("#answer").textContent = message;
-      $("#run-status").textContent = `Lỗi: ${message}`;
+      $("#run-status").textContent = `Error: ${message}`;
       $("#run-status").className = "run-status error";
     }
   } finally {
     stopProgressPolling();
     $("#run").disabled = false;
-    $("#run").innerHTML = '<i data-lucide="play"></i> Chạy pipeline';
+    $("#run").innerHTML = '<i data-lucide="play"></i> Run pipeline';
     if (window.lucide) {
       window.lucide.createIcons();
     }
@@ -294,8 +294,8 @@ async function runPipeline() {
 
 function applyResult(result) {
   state.result = result;
-  $("#answer").textContent = result.answer || "(Không có câu trả lời)";
-  $("#expected").textContent = result.expected_answer ? `Đáp án gốc: ${result.expected_answer}` : "";
+  $("#answer").textContent = result.answer || "(No answer)";
+  $("#expected").textContent = result.expected_answer ? `Original answer: ${result.expected_answer}` : "";
   $("#confidence-label").textContent = `${result.confidence.label} · ${result.confidence.score}`;
   $("#confidence-meter").value = result.confidence.score;
   $("#latency").textContent = `${result.latency_ms} ms`;
@@ -341,11 +341,11 @@ async function waitForResult(requestId) {
       return fetchJson(`/api/result/${encodeURIComponent(requestId)}`);
     }
     if (progress.status === "error") {
-      const message = last?.message || "Pipeline lỗi. Xem terminal để biết chi tiết.";
+      const message = last?.message || "Pipeline failed. Check the terminal for details.";
       throw new Error(message);
     }
   }
-  throw new Error("Pipeline chạy quá lâu qua tunnel. Backend vẫn có thể đang chạy; xem terminal VPS.");
+  throw new Error("Pipeline took too long through the tunnel. Backend may still be running; check the VPS terminal.");
 }
 
 function sleep(ms) {
@@ -355,9 +355,9 @@ function sleep(ms) {
 function describeError(error) {
   const text = String(error?.message || error || "").trim();
   if (/HTTP 502|Bad Gateway|Load failed|Failed to fetch/i.test(text)) {
-    return "Tunnel Serveo bị ngắt/timeout tạm thời. Backend vẫn có thể đang chạy; bấm lại hoặc xem tab Progress.";
+    return "Serveo tunnel disconnected or timed out temporarily. Backend may still be running; retry or check the Progress tab.";
   }
-  return text || "Kết nối bị ngắt hoặc backend chưa trả response. Xem tab Progress/terminal để biết bước cuối.";
+  return text || "Connection dropped or the backend has not returned a response. Check Progress/terminal for the latest step.";
 }
 
 function renderTrace() {
@@ -370,7 +370,7 @@ function renderTrace() {
       renderLiveSqlTrace();
       return;
     }
-    $("#trace-body").innerHTML = '<div class="empty">Trace sẽ xuất hiện sau khi chạy pipeline.</div>';
+    $("#trace-body").innerHTML = '<div class="empty">Trace will appear after running the pipeline.</div>';
     return;
   }
   if (state.tab === "plan") {
@@ -382,7 +382,7 @@ function renderTrace() {
       "Filter column": plan.filter_column || "-",
       "Filter value": plan.filter_value || "-",
       "Sort column": plan.sort_column || "-",
-      "Giải thích": plan.explanation || "-",
+      Explanation: plan.explanation || "-",
     });
   } else if (state.tab === "sql") {
     renderSqlTrace();
@@ -431,14 +431,14 @@ async function pollProgress(requestId) {
       renderProgressTrace();
     }
   } catch (error) {
-    $("#run-status").textContent = `Không đọc được progress: ${error.message}`;
+    $("#run-status").textContent = `Could not read progress: ${error.message}`;
   }
 }
 
 function renderProgressTrace() {
   const events = state.progress?.events || [];
   if (!events.length) {
-    $("#trace-body").innerHTML = '<div class="empty">Đang chờ progress từ backend...</div>';
+    $("#trace-body").innerHTML = '<div class="empty">Waiting for backend progress...</div>';
     return;
   }
   $("#trace-body").innerHTML = `<div class="progress-list">${events
@@ -481,13 +481,13 @@ function renderPipelineInspector() {
   const pill = $("#pipeline-stage-pill");
   pill.className = `stage-pill ${isError ? "error" : isDone ? "done" : latest ? "running" : ""}`;
   if (isError) {
-    pill.textContent = "Pipeline lỗi";
+    pill.textContent = "Pipeline failed";
   } else if (isDone) {
-    pill.textContent = "Hoàn tất";
+    pill.textContent = "Complete";
   } else if (latest && latestIndex >= 0) {
-    pill.textContent = `Đang chạy: ${PIPELINE_STEPS[latestIndex].label}`;
+    pill.textContent = `Running: ${PIPELINE_STEPS[latestIndex].label}`;
   } else {
-    pill.textContent = "Chưa chạy";
+    pill.textContent = "Not run";
   }
 
   stepper.innerHTML = PIPELINE_STEPS.map((step, index) => {
@@ -544,17 +544,17 @@ function getStepStatus(index, latestIndex, isDone, isError) {
 }
 
 function statusText(status) {
-  if (status === "done") return "Đã xong";
-  if (status === "running") return "Đang chạy";
-  if (status === "error") return "Lỗi";
-  return "Chờ";
+  if (status === "done") return "Complete";
+  if (status === "running") return "Running";
+  if (status === "error") return "Error";
+  return "Waiting";
 }
 
 function getLiveSqlInfo() {
   if (state.result?.sql_trace?.sql) {
     const trace = state.result.sql_trace;
     const params = JSON.stringify(trace.params || []);
-    const repair = trace.repaired ? "Có repair/sửa SQL" : "Không cần repair";
+    const repair = trace.repaired ? "SQL was repaired" : "No repair needed";
     const notes = (trace.repair_notes || []).length ? `<br>${escapeHtml(trace.repair_notes.join(" | "))}` : "";
     return {
       source: "Final SQL",
@@ -566,7 +566,7 @@ function getLiveSqlInfo() {
   const events = state.progress?.events || [];
   const patterns = [
     { label: "Final SQL", pattern: /Final SQL:\s*(.*)$/i },
-    { label: "SQL đang execute", pattern: /Executing SQL:\s*(.*)$/i },
+    { label: "Executing SQL", pattern: /Executing SQL:\s*(.*)$/i },
     { label: "Fallback SQL", pattern: /Fallback SQL:\s*(.*)$/i },
     { label: "Candidate SQL", pattern: /Candidate SQL:\s*(.*)$/i },
   ];
@@ -583,9 +583,9 @@ function getLiveSqlInfo() {
     }
   }
   return {
-    source: "Chưa có SQL",
-    sql: "SQL sẽ xuất hiện sau bước Planner/Text-to-SQL.",
-    meta: "Bấm “Chạy pipeline” để xem SQL ứng viên và SQL final.",
+    source: "No SQL yet",
+    sql: "SQL will appear after Planner/Text-to-SQL.",
+    meta: 'Press "Run pipeline" to inspect the candidate and final SQL.',
   };
 }
 
@@ -605,11 +605,11 @@ function renderLiveSqlTrace() {
 function renderSqlTrace() {
   const trace = state.result.sql_trace;
   const params = JSON.stringify(trace.params || [], null, 2);
-  const repairNotes = (trace.repair_notes || []).length ? trace.repair_notes.join("\n") : "Không có repair notes.";
+  const repairNotes = (trace.repair_notes || []).length ? trace.repair_notes.join("\n") : "No repair notes.";
   $("#trace-body").innerHTML = `
     <div class="sql-detail">
       <div class="sql-card">
-        <span>Final SQL dùng để query SQLite</span>
+        <span>Final SQL used to query SQLite</span>
         <pre class="sql-live">${escapeHtml(trace.sql)}</pre>
       </div>
       <div class="sql-card compact">
@@ -618,7 +618,7 @@ function renderSqlTrace() {
       </div>
       <div class="sql-card compact">
         <span>Repair / fallback</span>
-        <pre>${escapeHtml(trace.repaired ? repairNotes : "Không cần sửa SQL.")}</pre>
+        <pre>${escapeHtml(trace.repaired ? repairNotes : "No SQL repair needed.")}</pre>
       </div>
     </div>
   `;

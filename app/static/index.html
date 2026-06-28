@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,7 +19,7 @@
       </div>
 
       <div class="field">
-        <label for="split">Split dữ liệu</label>
+        <label for="split">Data split</label>
         <div class="segmented" id="split">
           <button class="active" data-split="dev">Dev</button>
           <button data-split="test">Test</button>
@@ -28,15 +28,15 @@
       </div>
 
       <div class="field">
-        <label for="domain">Lọc domain</label>
+        <label for="domain">Domain filter</label>
         <select id="domain">
-          <option value="">Tất cả domain</option>
+          <option value="">All domains</option>
         </select>
       </div>
 
       <div class="field search-field">
-        <label for="search">Tìm câu hỏi</label>
-        <input id="search" type="search" placeholder="Nhập từ khóa..." />
+        <label for="search">Search questions</label>
+        <input id="search" type="search" placeholder="Search keywords..." />
       </div>
 
       <div class="examples" id="examples"></div>
@@ -45,8 +45,8 @@
     <main class="workspace">
       <section class="topbar">
         <div>
-          <p class="eyebrow">Demo không train · dữ liệu thật</p>
-          <h2 id="table-title">Đang tải dataset...</h2>
+          <p class="eyebrow">No training · real data</p>
+          <h2 id="table-title">Loading dataset...</h2>
         </div>
         <div class="status-pill" id="dataset-status">Loading</div>
       </section>
@@ -57,15 +57,15 @@
           <span id="table-id">Table</span>
           <span id="domain-label">Domain</span>
         </div>
-        <textarea id="question" rows="2" placeholder="Chọn một QA thật hoặc nhập câu hỏi tiếng Việt cho bảng hiện tại"></textarea>
+        <textarea id="question" rows="2" placeholder="Select a real QA item or enter a Vietnamese question for the current table"></textarea>
         <div class="actions">
           <button id="run" class="primary">
             <i data-lucide="play"></i>
-            Chạy pipeline
+            Run pipeline
           </button>
           <button id="reload-table">
             <i data-lucide="table-2"></i>
-            Tải bảng
+            Reload table
           </button>
         </div>
       </section>
@@ -74,25 +74,25 @@
         <div class="panel-head">
           <div>
             <h3>Pipeline Inspector</h3>
-            <p class="panel-subtitle">Theo dõi realtime SQL được sinh ra và trình tự các agent chạy.</p>
+            <p class="panel-subtitle">Monitor generated SQL and agent execution in real time.</p>
           </div>
-          <span class="stage-pill" id="pipeline-stage-pill">Chưa chạy</span>
+          <span class="stage-pill" id="pipeline-stage-pill">Not run</span>
         </div>
         <div class="inspector-grid">
           <div class="sequence-panel">
             <div class="mini-head">
-              <span>Trình tự chạy</span>
+              <span>Execution order</span>
               <strong id="step-count">0/8</strong>
             </div>
             <div class="stepper" id="pipeline-steps"></div>
           </div>
           <div class="sql-panel">
             <div class="mini-head">
-              <span>SQL đang dùng</span>
-              <strong id="sql-source">Chưa có SQL</strong>
+              <span>Active SQL</span>
+              <strong id="sql-source">No SQL yet</strong>
             </div>
-            <pre class="sql-live" id="live-sql">Chưa chạy pipeline.</pre>
-            <div class="sql-meta" id="live-sql-meta">SQL sẽ xuất hiện sau bước Planner/Text-to-SQL.</div>
+            <pre class="sql-live" id="live-sql">Pipeline has not run yet.</pre>
+            <div class="sql-meta" id="live-sql-meta">SQL will appear after Planner/Text-to-SQL.</div>
           </div>
         </div>
       </section>
@@ -100,12 +100,12 @@
       <section class="answer-grid">
         <div class="answer-panel">
           <div class="panel-head">
-            <h3>Câu trả lời</h3>
+            <h3>Answer</h3>
             <span id="latency">0 ms</span>
           </div>
-          <div class="answer" id="answer">Chọn một ví dụ bên trái rồi bấm chạy.</div>
+          <div class="answer" id="answer">Select an example on the left, then run the pipeline.</div>
           <div class="expected" id="expected"></div>
-          <div class="run-status" id="run-status">Trạng thái: chờ chạy.</div>
+          <div class="run-status" id="run-status">Status: idle.</div>
           <div class="confidence">
             <div>
               <span>Confidence</span>
@@ -130,7 +130,7 @@
 
       <section class="table-section">
         <div class="panel-head">
-          <h3>Bảng dữ liệu thật</h3>
+          <h3>Real Data Table</h3>
           <span id="row-count">0 rows</span>
         </div>
         <div class="table-wrap">
